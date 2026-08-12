@@ -1,0 +1,11 @@
+obj/
+bin/ofxLPM-1959
+bin/libfmod.so
+__pycache__/
+*.pyc
+
+# Third-party: somebody else's film, not ours to redistribute.
+bin/data/video.mp4
+
+# Derived from video.mp4 by ./prepare.sh — 127 MB, no reason to store it.
+bin/data/audio.s16
