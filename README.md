@@ -35,10 +35,20 @@ cd bin && ./ofxLPM-1959
 
 Before launching, in this order:
 
-1. **Bring the chip up.** This app does not flash anything. Flash and clock the
-   die with the chip's own bring-up first, and make sure `CARAVAN_CLK_MHZ`
-   matches both the flashed image and the clock the biases were tuned at — synaptic efficacy is clock dependent, so a mismatch
-   is a silent gain change, not an error.
+1. **Bring the chip up:** `./flash_exhibition.sh`
+
+   One command. It flashes the image pinned in
+   `tools/firmware/neuron_handshake/` — verifying its sha256 first — and clocks
+   the die to 25 MHz, leaving the DACs alone. Use `--with-dac` only if you want
+   the default bias pass, which resets all 23 channels and clobbers tuned biases.
+
+   Do **not** flash whatever is in the main `firmware/` build tree instead: it
+   moves with development, and its input pulse width differs. Charge per input
+   spike is `I_syn × pulse_width`, so that changes how the array responds. See
+   `tools/firmware/neuron_handshake/README.md` for the measured widths.
+
+   `CARAVAN_CLK_MHZ` must be 25 for this app and its bridge. The DLL does not
+   survive a power cycle, so rerun the script after unplugging.
 2. **Free the FTDI.** `pkill -f "[n]euron_bridge.py"`, and close the GUI. Only
    one process may own it, and this app spawns its own bridge.
 3. **Plug the ADC board in.** `/dev/ttyACM0` by default. The app reopens the
