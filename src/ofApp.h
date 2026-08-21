@@ -123,6 +123,7 @@ private:
     SpscRing<HubelSpikeEvent> memSpikes;      // update() -> audio thread
     SpscRing<HubelSpikeEvent> aerSpikes;      // update() -> audio thread
     int64_t lastAerTs = 0;
+    std::atomic<uint64_t> aerSpikeCount{0};  // total AER spikes received for the monitored neuron
     std::atomic<float> chipRateHz{0.0f};
 
     SpscRing<MembraneFrame> vizRing;          // update() -> draw()
@@ -136,6 +137,7 @@ private:
     float audioFs = 48000.0f;
     Voice voice;
     std::atomic<float> aFilmGain{1.0f}, aTickGain{0.7f};
+    int audioMode = 2;  // 0=left only, 1=right only, 2=both
     std::atomic<float> aGrainDecay{0.0f}, aGrainRatio{4.0f};
     std::atomic<int> aTickSource{TICK_MEMBRANE};
 
@@ -199,6 +201,20 @@ private:
 
     // the window
     float splitFraction = 0.5f;
+
+    // ======================================================================
+    // self-healing
+    // ======================================================================
+    float pulseExtV = 1.38f;        // vepulseextp, loaded from bias file, nudged by recovery
+    float excBias = 0.336f;         // JExcWn0, loaded from bias file, nudged by recovery
+    int healStage = 0;              // 0=idle, 1=widening, 2=narrowing, 3=re-route
+    float healCheckAt = 0.0f;       // next time we evaluate the ratio
+    uint64_t healLastTrigCount = 0; // chipFired at last check
+    uint64_t healLastSpikeCount = 0;// aerSpikeCount at last check
+    float healRatio = 1.0f;         // last measured ratio
+    int healActions = 0;            // total recovery actions taken
+    int healBiasNudges = 0;         // bias nudges specifically
+    std::string healStatus = "idle";
 
     static const int MAX_LOG = 200;
     std::deque<std::string> logLines;

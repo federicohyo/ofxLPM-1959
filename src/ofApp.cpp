@@ -265,7 +265,13 @@ void ofApp::loadBiases(const std::string &path) {
     // Per-channel B commands through the bridge -- the only correct path. The
     // single-VREF route halves the seven NMOS biases and the array free-runs.
     for (auto &[name, val] : j.items()) {
-        try { bridge.setBias(name, val.get<float>()); ++count; } catch (...) {}
+        try {
+            const float v = val.get<float>();
+            bridge.setBias(name, v);
+            ++count;
+            if (name == "JExcWn0") excBias = v;
+            else if (name == "vepulseextp") pulseExtV = v;
+        } catch (...) {}
     }
     appendLog("pushed " + ofToString(count) + " biases from "
               + ofFilePath::getFileName(path));
@@ -534,8 +540,9 @@ void ofApp::audioOut(ofSoundBuffer &out) {
         const float film = fGain * 0.5f * (a + b);
         const float tick = tGain * grain();
 
-        out[i * ch] = ofClamp(film, -1.0f, 1.0f);
-        if (ch >= 2) out[i * ch + 1] = ofClamp(tick, -1.0f, 1.0f);
+        const int am = audioMode;
+        out[i * ch] = ofClamp(am == 1 ? 0.0f : film, -1.0f, 1.0f);
+        if (ch >= 2) out[i * ch + 1] = ofClamp(am == 0 ? 0.0f : tick, -1.0f, 1.0f);
         ++head;
     }
 
@@ -622,6 +629,7 @@ void ofApp::update() {
             ++inWindow;
             if (s.timestamp_us > lastAerTs) {
                 lastAerTs = s.timestamp_us;
+                aerSpikeCount.fetch_add(1);
                 HubelSpikeEvent e;
                 e.frame = 0;
                 e.excursion = 1.0f;
@@ -641,7 +649,77 @@ void ofApp::update() {
         appendLog("clicks " + ofToString(filmDetected.load())
                   + "  triggers " + ofToString(chipFired.load())
                   + "  N" + ofToString(chipNeuron) + " " + ofToString(chipRateHz.load(), 1)
-                  + " spk/s  membrane " + ofToString(memDet.rate(), 1) + " Hz");
+                  + " spk/s  aerN14 " + ofToString(aerSpikeCount.load())
+                  + "  membrane " + ofToString(memDet.rate(), 1) + " Hz");
+    }
+
+    // ------------------------------------------------------------------
+    // self-healing: maintain 1:1 input→output ratio
+    // ------------------------------------------------------------------
+    // Every healCheckInterval seconds, compare TRIGs sent to AER spikes
+    // received for the monitored neuron. If the ratio drifts, adjust.
+    //
+    // The sentinel is the host-side count comparison. Recovery is a PID-like
+    // loop: widen/narrow the pulse width first (it is DAC-free), then nudge
+    // the excitatory bias, and finally re-route as last resort.
+    if (chipEnabled && stimulating.load() && boot == BOOT_DONE) {
+        constexpr float kHealInterval = 15.0f;
+        if (now - healCheckAt > kHealInterval) {
+            healCheckAt = now;
+
+            const uint64_t trigs = chipFired.load();
+            const uint64_t spikes = aerSpikeCount.load();
+            const uint64_t dTrigs = trigs - healLastTrigCount;
+            const uint64_t dSpikes = spikes - healLastSpikeCount;
+            healLastTrigCount = trigs;
+            healLastSpikeCount = spikes;
+
+            if (dTrigs >= 5) {
+                healRatio = (float)dSpikes / (float)dTrigs;
+
+                if (healRatio < 0.95f) {
+                    // Under-firing: raise excitatory synapse bias (more charge)
+                    // Adaptive step: larger when far from 1:1, smaller when close
+                    const float err = 1.0f - healRatio;
+                    const float step = std::max(0.001f, std::min(0.010f, std::fabs(err) * 0.020f));
+                    const float newV = excBias + step;
+                    excBias = newV;
+                    bridge.setBias("JExcWn0", newV);
+                    healStage = 1;
+                    ++healActions;
+                    ++healBiasNudges;
+                    healStatus = "raising JExcWn0 to " + ofToString(newV, 4) + "V";
+                    appendLog("heal: ratio " + ofToString(healRatio, 2)
+                              + "  step " + ofToString(step, 3) + "V  " + healStatus);
+                } else if (healRatio > 1.05f) {
+                    // Over-firing: lower excitatory synapse bias (less charge)
+                    // Adaptive step: larger when far from 1:1, smaller when close
+                    const float err = healRatio - 1.0f;
+                    const float step = std::max(0.001f, std::min(0.010f, std::fabs(err) * 0.020f));
+                    const float newV = excBias - step;
+                    excBias = newV;
+                    bridge.setBias("JExcWn0", newV);
+                    healStage = 2;
+                    ++healActions;
+                    ++healBiasNudges;
+                    healStatus = "lowering JExcWn0 to " + ofToString(newV, 4) + "V";
+                    appendLog("heal: ratio " + ofToString(healRatio, 2)
+                              + "  step " + ofToString(step, 3) + "V  " + healStatus);
+                } else if (healRatio < 0.01f && dTrigs > 20) {
+                    // Dead: re-route
+                    bridge.sendProgram(chipSynapse, chipWeight, chipExc);
+                    bridge.sendRoute(chipSynapse, chipNeuron, chipExc);
+                    healStage = 3;
+                    ++healActions;
+                    healStatus = "re-routing S" + ofToString(chipSynapse)
+                                 + " -> N" + ofToString(chipNeuron);
+                    appendLog("heal: dead! " + healStatus);
+                } else {
+                    healStage = 0;
+                    healStatus = "ok (" + ofToString(healRatio, 2) + ")";
+                }
+            }
+        }
     }
 
     spiralPeriod = cfg.spiralPeriod;
@@ -914,14 +992,20 @@ void ofApp::drawCalibration() {
              chipFired.load(), paused.load() ? "PAUSED" : "");
     ofDrawBitmapString(buf, 16, 62);
 
+    const char *hue = healStage == 0 ? "ok" : healStage == 1 ? "WIDEN" : healStage == 2 ? "NARROW" : "REROUTE";
+    snprintf(buf, sizeof(buf),
+             "heal: pe=%.3fV  ratio=%.2f  %s  actions=%d  nudges=%d  %s",
+             pulseExtV, healRatio, hue, healActions, healBiasNudges, healStatus.c_str());
+    ofDrawBitmapString(buf, 16, 82);
+
     snprintf(buf, sizeof(buf), "T %.2f s   scopeGain %.1f   fps %.1f   "
              "[arrows] thr/gain  [ ] period  [space] pause  type 'quit'",
              spiralPeriod, cfg.scopeGain, ofGetFrameRate());
-    ofDrawBitmapString(buf, 16, 82);
+    ofDrawBitmapString(buf, 16, 102);
 
     int line = 0;
     for (auto it = logLines.rbegin(); it != logLines.rend() && line < 2; ++it, ++line)
-        ofDrawBitmapString(*it, 16, 102 + line * 14);
+        ofDrawBitmapString(*it, 16, 122 + line * 14);
 }
 
 // ---------------------------------------------------------------------------
@@ -978,6 +1062,21 @@ void ofApp::keyPressed(int key) {
         paused.store(p);
         video.setPaused(p);
         appendLog(p ? "paused" : "running");
+        return;
+    }
+    if (key == 'r' || key == 'R') {
+        audioMode = 1;
+        appendLog("audio: right only (chip)");
+        return;
+    }
+    if (key == 'l' || key == 'L') {
+        audioMode = 0;
+        appendLog("audio: left only (film)");
+        return;
+    }
+    if (key == 'b' || key == 'B') {
+        audioMode = 2;
+        appendLog("audio: both");
         return;
     }
 

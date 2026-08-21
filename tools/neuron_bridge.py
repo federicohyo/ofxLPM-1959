@@ -105,6 +105,7 @@ UART_CMD_SYNFIRE_STOP = 0xE5
 UART_CMD_SPIKE_MASK = 0xEC   # [0xEC, b0, b1, b2] -> mask = b0 | b1<<6 | (b2&0xF)<<12
 UART_CMD_TRAIN_START = 0xED  # [0xED, b3,b2,b1,b0] -> regular train, 24-bit tick period;
                              # stopped by UART_CMD_POISSON_STOP (0xE3)
+UART_CMD_SET_PULSE = 0xDC     # [0xDC, mult(1..63)] — input-pulse width multiplier
 UART_CMD_COINCIDENCE = 0xE6
 UART_CMD_SET_RECUR = 0xE9
 UART_CMD_RECUR_CTRL = 0xEA
@@ -940,6 +941,18 @@ def main():
             elif cmd == "TRIGSTOP":
                 port.write(bytes([UART_CMD_POISSON_STOP]))   # 0xE3 stops both trains
                 emit("TRIGSTOPOK")
+
+            elif cmd == "PULSEMULT" and len(parts) == 2:
+                try:
+                    mult = int(parts[1])
+                except ValueError:
+                    emit("ERROR Invalid PULSEMULT value")
+                    continue
+                if mult < 1 or mult > 63:
+                    emit("ERROR PULSEMULT out of range [1,63]")
+                    continue
+                port.write(bytes([UART_CMD_SET_PULSE, mult]))
+                emit(f"PULSEMULTOK {mult}")
 
             elif cmd == "MASK" and len(parts) == 2:
                 # Which neurons the chip should stream. Bit i set = stream neuron i.

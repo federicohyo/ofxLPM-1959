@@ -74,13 +74,16 @@ neuron would sit there silent.
 ## Keys
 
 | | |
-|---|---|
+|---|---|---|
 | `-` `=` | chip channel level, logged so it can be written back to `settings.json` |
 | `↑` `↓` | scope gain |
 | `←` `→` | membrane detector threshold (logs the resulting rate) |
 | `,` `.` | film detector threshold (logs the resulting rate) |
 | `[` `]` | spiral period |
 | `V` | flip the scope trace |
+| `R` | right channel only (chip ticks) |
+| `L` | left channel only (film soundtrack) |
+| `B` | both channels (default) |
 | space | pause film and video; the die stops being stimulated |
 | type `cal` | the full calibration overlay |
 | type `quit` | exit (Escape is disabled) |
@@ -124,6 +127,15 @@ detector's `SpikeEvent` to `HubelSpikeEvent`, because `NeuronBridge.h` has a
 
 Edit `OF_ROOT` in `config.make` if openFrameworks does not live where mine
 does. `pip install pyftdi` for the chip side.
+
+## Self-healing
+
+Every 15 s the app compares TRIGs sent to the chip against AER spikes received
+back from the monitored neuron. If the ratio drifts from 1:1, it adjusts the
+excitatory synapse bias (`JExcWn0`) with an adaptive step (1–10 mV, larger when
+further from target). The sentinel and recovery run entirely in software on the
+host, using the same bias commands the GUI uses. The calibration overlay (type
+`cal`) shows the current ratio, bias voltage, and action count.
 
 ## Without the chip, or without the film
 

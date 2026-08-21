@@ -40,6 +40,7 @@ public:
     void sendStimNeuron(int id);  // load neuron id's bias + stimulate only it with the ECG delta
     void sendRecurLevel(int per); // regenerate W_rec at `per` connections/neuron
     void sendCoincidence(int synA, int synB, int neuron, float dt_us);  // one coincidence trial
+    void sendPulseMult(int mult);  // 0xDC: input-pulse width multiplier (1..63)
     std::vector<std::string> drainLog();
 
     // Data access (main thread)

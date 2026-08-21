@@ -9,6 +9,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
 #include <sstream>
 
 NeuronBridge::NeuronBridge()
@@ -229,6 +230,14 @@ void NeuronBridge::sendRecurLevel(int per) {
 void NeuronBridge::sendCoincidence(int synA, int synB, int neuron, float dt_us) {
     char buf[64];
     snprintf(buf, sizeof(buf), "COINC %d %d %d %.1f\n", synA, synB, neuron, dt_us);
+    std::lock_guard<std::mutex> lock(cmdMutex);
+    cmdQueue.push(std::string(buf));
+}
+
+void NeuronBridge::sendPulseMult(int mult) {
+    char buf[32];
+    const int m = std::max(1, std::min(63, mult));
+    snprintf(buf, sizeof(buf), "PULSEMULT %d\n", m);
     std::lock_guard<std::mutex> lock(cmdMutex);
     cmdQueue.push(std::string(buf));
 }
