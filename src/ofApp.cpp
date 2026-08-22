@@ -588,6 +588,34 @@ void ofApp::update() {
         reloadSettingsIfChanged();
     }
 
+    // A link that has come back is a chip that has been brought back: the
+    // service on the plinth reflashes the die every time it starts, so it is
+    // listening with no weights, no route, and a Timer0 counting from zero
+    // again. Stage the whole bring-up a second time rather than talking to a
+    // chip that is no longer set up. (The first connection also raises this,
+    // which is why it only fires once we are past BOOT_WAIT.)
+    if (netBridge && netBridge->consumeReconnect() && boot != BOOT_WAIT) {
+        appendLog("link came back -- bringing the die up again");
+        stimulating.store(false);
+        filmSpikes.clear();
+
+        // The AER accounting is all relative to timestamps and counts from the
+        // old session. Left alone, the high-water mark would sit in the future
+        // of the restarted Timer0, every new spike would look old, and the
+        // sentinel would read a ratio of zero and haul the bias up chasing it.
+        lastAerTs = 0;
+        aerNewThisFrame = 0;
+        aerNewThisWindow = 0;
+        healLastTrigCount = chipFired.load();
+        healLastSpikeCount = aerSpikeCount;
+        lastFilmCount = filmDetected.load();
+        healRatio = 1.0f;
+        heartbeatAt = now;
+
+        boot = BOOT_WAIT;
+        bootStageAt = now;
+    }
+
     advanceBoot();
     // When using a remote chip, membrane comes from the network instead of serial
     if (netBridge) {
@@ -701,8 +729,11 @@ void ofApp::update() {
     // 15-second heartbeat: log counts + self-healing in one window so the
     // numbers in the log are exactly what the heal acted on.
     // ------------------------------------------------------------------
+    // Not while the link is down: with no spikes coming back the ratio reads
+    // zero, and the sentinel would spend the outage walking JExcWn0 away from a
+    // bias that was never the problem.
     if (chipEnabled && stimulating.load() && boot == BOOT_DONE
-        && now - heartbeatAt > 15.0f) {
+        && brg()->isConnected() && now - heartbeatAt > 15.0f) {
         heartbeatAt = now;
 
         const uint64_t dClicks = filmDetected.load() - lastFilmCount;

@@ -71,6 +71,115 @@ sequence as it is written down, `chipSynapse` (0) is the one actually routed
 and fired. Weighting only the first would fire an unweighted synapse and the
 neuron would sit there silent.
 
+## The die on the other side of the network
+
+The die and the ADC board do not have to be on the machine that draws the
+picture. `remoteChip` in `settings.json` is a host and three ports; set it and
+the app spawns no bridge and opens no serial port, taking both streams over TCP
+instead. `tools/chip_server.py` is the other end: it owns the FTDI and the ADC
+on the plinth machine and relays three things.
+
+| port | direction | carries |
+|---|---|---|
+| 9100 | plinth → app | `neuron_bridge.py` stdout: `READY`, `S <n> <us>`, `RATE`, `BOK`/`MOK`/`POK`/`SOK` |
+| 9101 | plinth → app | `seconds,volts` from the ADC board, at the board's own rate |
+| 9102 | app → plinth | anything the app would have written to the bridge's stdin |
+
+The plinth machine here is a Raspberry Pi 5 (Debian 13, aarch64) at
+`192.168.1.48`, with the FT4232H and the Pixhawk both on its USB. It carries
+`~/chip1959`:
+
+```
+~/chip1959/
+  tools/           rsync of this repo's tools/ (bridge, chip_server, pinned hex,
+                   and systemd/ -- the rules and the unit below)
+  run_neuron_test.py    from the chip repo root -- the flasher
+  firmware -> tools/firmware   so run_neuron_test.py finds riscvprog.py
+  .venv/           python3 -m venv --system-site-packages; pip install pyftdi
+```
+
+### The devices start it, and stop it
+
+There is no command to run on the plinth. `tools/systemd/install.sh`, run once,
+lays down a udev rules file and a service unit, and after that the two cables
+are the switch: plug the die and the scope in and the stream comes up on
+9100/9101/9102, unplug either and it goes away.
+
+The service **binds to both devices** (`BindsTo=`), so losing one is a clean
+stop rather than a half-served link, and udev's `SYSTEMD_WANTS` starts it again
+when they are back — at boot as well, since udev coldplugs what is already
+plugged in. There is nothing to `systemctl enable`; enabling it would start it
+at boot with no chip attached, which is the opposite of what is wanted.
+
+Two details in the rules are load bearing:
+
+- The die is depended on by its **raw USB node** (`/dev/chip-ftdi`), not by a
+  `ttyUSB*`. pyftdi drives the FT4232H through libusb and detaches `ftdi_sio`
+  from every interface it takes, so the `ttyUSB*` nodes disappear as soon as the
+  bridge starts. A service bound to one of those would stop itself.
+- Both devices get a stable symlink (`/dev/chip-ftdi`, `/dev/chip-scope`), so
+  the unit does not care whether the scope came up as `ttyACM0` or `ttyACM1`,
+  and the server is pointed at `/dev/chip-scope`.
+
+Starting takes about twenty-five seconds, because the service flashes before it
+serves: the DLL does not survive a power cycle, so every start puts the pinned
+image on the die over its bare crystal and then clocks it to 25 MHz. The ports
+do not open until that is done.
+
+```bash
+systemctl status chip1959        # is it up
+journalctl -u chip1959 -f        # what it is saying
+sudo systemctl restart chip1959  # reflash and re-serve by hand
+sudo systemctl stop chip1959     # free the FTDI for bench work
+```
+
+A stop by hand stays stopped until a device is replugged, which is what you
+want when you need the FTDI for something else.
+
+Then, on the machine with the projector:
+
+```bash
+# bin/data/settings.json
+"remoteChip": "192.168.1.48:9100:9101:9102"
+cd bin && ./ofxLPM-1959
+```
+
+`settings.json_remote` and `settings.json_local` are the two presets; copy one
+over `settings.json`. Before launching, the link can be read directly:
+
+```bash
+nc 192.168.1.48 9101 | head      # seconds,volts at the board's rate
+nc 192.168.1.48 9100 | head      # S/RATE lines off the array
+```
+
+Nothing about the piece changes across the network. The bring-up still stages
+biases → monitor → PROG → ROUTE, the self-healing sentinel still walks
+`JExcWn0`, and the ratio still settles to 1:1 — measured over this link at 87
+triggers to 88 spikes back from N14.
+
+### The app dials, and keeps dialling
+
+`NetworkBridge` owns the reconnect, so the app never has to be relaunched to
+follow the plinth. It starts its thread whether or not the first connection
+worked, retries with a backoff from 0.5 s to 4 s, and notices the far end
+going away — `read()` returning 0, which is the only way TCP says so, told
+apart from the `EAGAIN` of a socket that is merely idle. Commands go out with
+`MSG_NOSIGNAL`: writing to a socket the far end has closed raises `SIGPIPE`,
+and the default action for that is to kill the process.
+
+**A link that comes back is a chip that has been brought back.** The service
+reflashes the die every time it starts, so it is listening with no weights, no
+route, and a Timer0 counting from zero. `consumeReconnect()` tells the app,
+which stages the whole bring-up again rather than talking to a chip that is no
+longer set up, and clears the AER accounting with it — the high-water timestamp
+especially, which would otherwise sit in the future of the restarted counter and
+make every new spike look old. The sentinel also holds still while the link is
+down, instead of reading the missing spikes as a bias that needs raising.
+
+Measured, pulling the die's cable with the piece running: the link drops, the
+service stops, and on replug the app reconnects, re-stages the bring-up, and is
+back at 72 triggers to 72 spikes — with nothing touched at either end.
+
 ## Keys
 
 | | |

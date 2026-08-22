@@ -13,6 +13,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <cerrno>
 #include <algorithm>
 
 NetworkBridge::NetworkBridge()
@@ -21,6 +22,7 @@ NetworkBridge::NetworkBridge()
     , recentDrops(0)
     , recentStalls(0)
     , connected(false)
+    , reconnected(false)
 {
 }
 
@@ -70,12 +72,36 @@ void NetworkBridge::connectSockets() {
 
     if (spikeFd >= 0 && membraneFd >= 0 && cmdFd >= 0) {
         connected = true;
+        reconnected = true;
+        retryMs = RETRY_MIN_MS;
         ofLogNotice("NetworkBridge") << "connected to " << host
             << " (spike:" << spikePort << " mem:" << membranePort << " cmd:" << cmdPort << ")";
     } else {
-        ofLogError("NetworkBridge") << "connection failed to " << host;
+        // Not an error: the plinth may simply not be plugged in yet. The thread
+        // keeps dialling, so this is a normal state to be in, not a failure.
         disconnectSockets();
     }
+}
+
+// A link that has gone is not the same as a link that was never there: the
+// buffers hold half a line, the command queue holds commands for a chip that is
+// no longer listening, and the spike deque holds timestamps from a Timer0 that
+// will restart at zero when the server reflashes the die on its way back up.
+// All of it has to go, or it poisons the next connection.
+void NetworkBridge::handleLinkLoss(const char* why) {
+    ofLogNotice("NetworkBridge") << "link lost (" << why << ") -- retrying " << host;
+    disconnectSockets();
+
+    readBuffer.clear();
+    memBuffer.clear();
+    { std::lock_guard<std::mutex> lock(memMutex_);   memSamples_.clear(); }
+    { std::lock_guard<std::mutex> lock(spikeMutex);  spikes.clear(); }
+    { std::lock_guard<std::mutex> lock(cmdMutex);    std::queue<std::string>().swap(cmdQueue); }
+
+    spikeRate = 0;
+    recentDrops = 0;
+    recentStalls = 0;
+    retryMs = RETRY_MIN_MS;
 }
 
 void NetworkBridge::disconnectSockets() {
@@ -91,8 +117,11 @@ void NetworkBridge::start(const std::string& host_, int sPort, int mPort, int cP
     membranePort = mPort;
     cmdPort = cPort;
 
+    retryMs = RETRY_MIN_MS;
     connectSockets();
-    if (!connected) return;
+    // The thread runs whether or not that worked. It is the thing that dials,
+    // so the app comes up fine with the plinth switched off and joins the die
+    // whenever it appears.
     startThread();
 }
 
@@ -275,34 +304,61 @@ void NetworkBridge::getSpikeCounts(int out[16], float windowSec){
 
 // --- threaded function: read from TCP sockets, write commands ---------------
 
-static bool readFd(int fd, std::string& buf, std::string& line) {
+// Pull everything the socket has into buf. Returns false once the peer is gone
+// -- read() returning 0 is the only way TCP says so, and it has to be told apart
+// from EAGAIN, which is just a non-blocking socket saying "nothing right now".
+// The old single-read version could not distinguish the two, which is why a
+// dead server used to leave the app sitting there quietly forever.
+static bool drainFd(int fd, std::string& buf) {
+    if (fd < 0) return false;
     char tmp[4096];
-    ssize_t n = read(fd, tmp, sizeof(tmp));
-    if (n > 0) {
-        buf.append(tmp, n);
-    } else if (n == 0) {
-        return false; // disconnected
+    for (;;) {
+        const ssize_t n = read(fd, tmp, sizeof(tmp));
+        if (n > 0) { buf.append(tmp, (size_t)n); continue; }
+        if (n == 0) return false;                                  // peer closed
+        if (errno == EINTR) continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return true;  // simply idle
+        return false;                                              // a real error
     }
-    size_t pos = buf.find('\n');
-    if (pos != std::string::npos) {
-        line = buf.substr(0, pos);
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        buf.erase(0, pos + 1);
-        return true;
+}
+
+static bool popLine(std::string& buf, std::string& line) {
+    const size_t pos = buf.find('\n');
+    if (pos == std::string::npos) return false;
+    line = buf.substr(0, pos);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    buf.erase(0, pos + 1);
+    return true;
+}
+
+// Sleep, but in slices, so stop() does not have to wait out a whole backoff.
+static void sleepUnlessStopping(const ofThread& self, int ms) {
+    while (ms > 0 && self.isThreadRunning()) {
+        const int slice = std::min(ms, 100);
+        ofSleepMillis(slice);
+        ms -= slice;
     }
-    return false;
 }
 
 void NetworkBridge::threadedFunction(){
     while(isThreadRunning()){
+        // --- dial, if there is nothing to read from --------------------------
         if (!connected) {
-            ofSleepMillis(100);
-            continue;
+            sleepUnlessStopping(*this, retryMs);
+            if (!isThreadRunning()) break;
+            connectSockets();
+            if (!connected) {
+                retryMs = std::min(retryMs * 2, (int)RETRY_MAX_MS);
+                continue;
+            }
+            continue;   // read on the next pass, with clean buffers
         }
 
-        // Read spike lines
+        // --- the die's own report --------------------------------------------
+        if (!drainFd(spikeFd, readBuffer)) { handleLinkLoss("spike port closed"); continue; }
+
         std::string line;
-        while (readFd(spikeFd, readBuffer, line)) {
+        while (popLine(readBuffer, line)) {
             if (line.empty()) continue;
 
             if (line == "READY") {
@@ -358,26 +414,37 @@ void NetworkBridge::threadedFunction(){
             }
         }
 
-        // Read membrane lines (forwarded to caller via drainMembrane)
+        // --- the membrane, forwarded to the caller via drainMembrane ---------
+        if (!drainFd(membraneFd, memBuffer)) { handleLinkLoss("membrane port closed"); continue; }
+
         std::string memLine;
-        while (readFd(membraneFd, memBuffer, memLine)) {
+        while (popLine(memBuffer, memLine)) {
             std::lock_guard<std::mutex> lock(memMutex_);
             memSamples_.push_back(memLine);
             if (memSamples_.size() > 10000) memSamples_.erase(memSamples_.begin(), memSamples_.begin() + 5000);
         }
 
-        // Flush command queue to cmd socket
+        // --- commands out ----------------------------------------------------
+        // MSG_NOSIGNAL, not write(): writing to a socket the far end has closed
+        // raises SIGPIPE, whose default action is to kill the process. The
+        // whole point here is to survive that moment, not to die in it.
+        bool writeFailed = false;
         {
             std::lock_guard<std::mutex> lock(cmdMutex);
             while (!cmdQueue.empty()) {
                 const std::string& cmd = cmdQueue.front();
                 if (cmdFd >= 0) {
-                    (void)write(cmdFd, cmd.c_str(), cmd.size());
+                    const ssize_t n = send(cmdFd, cmd.c_str(), cmd.size(), MSG_NOSIGNAL);
+                    if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                        writeFailed = true;
+                        break;
+                    }
                 }
                 cmdQueue.pop();
             }
         }
+        if (writeFailed) { handleLinkLoss("command port closed"); continue; }
 
-        ofSleepMillis(1);
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
 }

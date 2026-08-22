@@ -102,7 +102,7 @@
   "_bridgePath": "The FTDI driver, spawned as a child process and spoken to over a pipe. Relative to the executable. tools/ holds a copy taken from the chip's own repository; on that bench, point this at the maintained one (../../neuron_bridge.py there) so there is a single source of truth rather than two that drift.",
   "bridgePath": "../tools/neuron_bridge.py",
   "_remoteChip": "Non-empty: connect to a remote chip_server.py over TCP instead of spawning a local bridge. Format: host:spikePort:memPort:cmdPort  e.g. pi-zero.local:9100:9101:9102. Empty string = local bridge.",
-  "remoteChip": "",
+  "_remoteChip": "192.168.1.48:9100:9101:9102",
   "biasFile": "bias_n14_lpm_v1.biases",
   "chipNeuron": 14,
   "_chipSynapse": "chipSynapse is the synapse that is routed to the neuron and fired. chipProgSyn is a second synapse that is weight-programmed alongside it and otherwise left alone - the bench sequence is written down as PROG S14 while the route that carries the film is S0, so both are given the weight. Set chipProgSyn to -1 to program only the routed one.",

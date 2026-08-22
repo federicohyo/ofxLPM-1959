@@ -97,7 +97,7 @@ def relay_bridge_stdout(bridge_proc, spike_port):
 def relay_membrane(device_path, device_baud, membrane_port):
     """Read membrane ADC lines and forward to all membrane_port clients."""
     import serial
-    ser = serial.Serial(device_path, device_baud, timeout=0.1)
+    ser = serial.Serial(device_path, device_baud, timeout=0)
     clients = []
     membrane_port.listen(5)
     membrane_port.setblocking(False)
@@ -113,7 +113,7 @@ def relay_membrane(device_path, device_baud, membrane_port):
         except BlockingIOError:
             pass
         try:
-            data = ser.read(4096)
+            data = ser.read(ser.in_waiting or 1)
             if data:
                 buf += data
                 while b"\n" in buf:
@@ -146,12 +146,15 @@ def main():
     parser.add_argument("--baud", type=int, default=115200)
     args = parser.parse_args()
 
-    # Start neuron_bridge.py as subprocess
+    # Start neuron_bridge.py as subprocess.
+    # stderr is NOT piped: the bridge redirects all of its chatter there, and a
+    # pipe nobody drains fills after 64 KB and blocks the bridge mid-stream.
+    # Inherit our own stderr instead, so it lands in the log we are started with.
     bridge_proc = subprocess.Popen(
         [sys.executable, "-u", args.bridge],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=sys.stderr,
         cwd=os.path.dirname(os.path.abspath(args.bridge)) or ".",
     )
 

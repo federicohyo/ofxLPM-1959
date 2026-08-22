@@ -1,0 +1,18 @@
+# The two devices the piece needs, named so they can be depended on.
+#
+# The die's FT4232H is matched on the *raw USB device*, not on the ttyUSB*
+# nodes ftdi_sio creates. pyftdi speaks to the chip through libusb and detaches
+# ftdi_sio from every interface it takes, so those nodes disappear the moment
+# the bridge starts and come back when it stops. The USB node itself is there
+# for exactly as long as the cable is.
+#
+# GROUP/MODE is what lets libusb open it without root; the user must be in
+# plugdev. SYMLINK gives the device a stable name, which systemd turns into a
+# stable device unit (dev-chip\x2dftdi.device) for chip1959.service to bind to.
+# SYSTEMD_WANTS is what starts the service when the thing is plugged in.
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6011", GROUP="plugdev", MODE="0660", SYMLINK+="chip-ftdi", TAG+="systemd", ENV{SYSTEMD_WANTS}+="chip1959.service"
+
+# The Pixhawk sampling the analog monitor pin. A plain CDC tty, and nothing
+# detaches it, but it is named here too so the service does not depend on
+# whether it enumerated as ttyACM0 or ttyACM1.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="26ac", ATTRS{idProduct}=="0011", SYMLINK+="chip-scope", TAG+="systemd", ENV{SYSTEMD_WANTS}+="chip1959.service"

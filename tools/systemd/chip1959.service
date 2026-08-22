@@ -1,0 +1,51 @@
+[Unit]
+Description=1959 chip server -- the die and its scope, streamed over TCP
+Documentation=file:///home/hyo/chip1959/tools/README.md
+
+# Both devices, or nothing. BindsTo stops the service the instant either one is
+# unplugged, and udev's SYSTEMD_WANTS (70-chip1959.rules) starts it again when
+# both are back -- at boot as well, since udev coldplugs what is already there.
+# The FTDI is depended on by its raw USB node: pyftdi detaches ftdi_sio from the
+# interfaces it uses, so ttyUSB* would disappear under us and take the service
+# with it.
+BindsTo=dev-chip\x2dftdi.device dev-chip\x2dscope.device
+After=dev-chip\x2dftdi.device dev-chip\x2dscope.device
+
+# Plugging one device and then the other means the first attempt starts before
+# the second device exists, and fails. That is normal here, so do not let it
+# count toward a start limit.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=hyo
+Group=hyo
+SupplementaryGroups=plugdev dialout
+WorkingDirectory=/home/hyo/chip1959
+
+# Must agree with the image flashed below. The baud is welded to the core clock
+# (960 x f_MHz); a mismatch is not an error, it is silence.
+Environment=CARAVAN_CLK_MHZ=25
+
+# Only one process may own the FTDI. Anything left over from a hand-started
+# server is cleared first; as user hyo this can only reach hyo's own processes.
+ExecStartPre=-/usr/bin/pkill -f [c]hip_server.py
+ExecStartPre=-/usr/bin/pkill -f [n]euron_bridge.py
+
+# The DLL does not survive a power cycle: the die comes back on its bare 10 MHz
+# crystal. Flashing happens on the crystal and the clock is engaged afterwards,
+# which is the order run_neuron_test.py implements. --skip-dac leaves the 23
+# bias channels alone -- the app pushes its own bias file at bring-up.
+# This takes the better part of a minute; the ports do not open until it is done.
+ExecStartPre=/home/hyo/chip1959/.venv/bin/python3 run_neuron_test.py --clock 25 --hex tools/firmware/neuron_handshake/neuron_handshake_25MHz_exhibition.hex --skip-dac
+
+ExecStart=/home/hyo/chip1959/.venv/bin/python3 -u tools/chip_server.py --bridge /home/hyo/chip1959/tools/neuron_bridge.py --device /dev/chip-scope --baud 115200
+
+# An unplug is a clean stop, not a failure, so this does not fight BindsTo.
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+
+# There is deliberately no [Install] section. The service is pulled in by the devices themselves, so
+# there is nothing to enable: plug both in and it runs, unplug either and it
+# stops. `systemctl enable` would start it at boot with no chip attached.
