@@ -5,7 +5,10 @@
 // The chip: one owner of the FTDI, spawned as a child process. Its SpikeEvent
 // is the AER address stream, which is why the detector's own SpikeEvent has to
 // be renamed before it comes in -- see HubelDetector.h.
+// For remote operation (chip on another machine), set "remoteChip" in settings.json.
+#include "IBridge.h"
 #include "NeuronBridge.h"
+#include "NetworkBridge.h"
 
 // The installation's own signal path, shared verbatim via -I../ofxLPM/coro/src.
 #include "HubelDetector.h"   // Detector.h + RingBuffer.h, SpikeEvent -> HubelSpikeEvent
@@ -99,6 +102,8 @@ private:
     // 2026 -- the die: commands out over FTDI, membrane back over the ADC
     // ======================================================================
     NeuronBridge bridge;
+    NetworkBridge* netBridge = nullptr;  // non-null when using remote chip
+    IBridge* brg() { return netBridge ? (IBridge*)netBridge : &bridge; }
 
     enum BootStage { BOOT_WAIT, BOOT_BIASES, BOOT_MONITOR, BOOT_PROG,
                      BOOT_ROUTE, BOOT_RUN, BOOT_DONE };
@@ -123,7 +128,9 @@ private:
     SpscRing<HubelSpikeEvent> memSpikes;      // update() -> audio thread
     SpscRing<HubelSpikeEvent> aerSpikes;      // update() -> audio thread
     int64_t lastAerTs = 0;
-    std::atomic<uint64_t> aerSpikeCount{0};  // total AER spikes received for the monitored neuron
+    uint64_t aerSpikeCount = 0;              // cumulative total (update())
+    int aerNewThisFrame = 0;                 // new spikes this frame (update())
+    uint64_t aerNewThisWindow = 0;           // accumulated over heal interval
     std::atomic<float> chipRateHz{0.0f};
 
     SpscRing<MembraneFrame> vizRing;          // update() -> draw()
@@ -172,6 +179,7 @@ private:
     // the die, and the one route the film drives
     bool chipEnabled = true;
     std::string bridgePath = "../tools/neuron_bridge.py";
+    std::string remoteChip;              // empty = local, otherwise "host:spikePort:memPort:cmdPort"
     std::string biasFile = "bias_n14_lpm_v1.biases";
     int chipNeuron = 14;
     int chipSynapse = 0;    // routed and fired
@@ -209,6 +217,7 @@ private:
     float excBias = 0.336f;         // JExcWn0, loaded from bias file, nudged by recovery
     int healStage = 0;              // 0=idle, 1=widening, 2=narrowing, 3=re-route
     float healCheckAt = 0.0f;       // next time we evaluate the ratio
+    uint64_t lastFilmCount = 0;    // filmDetected at last check
     uint64_t healLastTrigCount = 0; // chipFired at last check
     uint64_t healLastSpikeCount = 0;// aerSpikeCount at last check
     float healRatio = 1.0f;         // last measured ratio

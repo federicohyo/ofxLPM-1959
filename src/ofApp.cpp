@@ -132,13 +132,38 @@ void ofApp::setup() {
     // bridge to say READY before it touches a DAC.
     bootStageAt = ofGetElapsedTimef();
     if (chipEnabled) {
-        // Relative to the executable, so the app is movable. tools/ holds a
-        // vendored copy; on the chip's own bench, point bridgePath at the
-        // maintained one instead so there is a single source of truth.
-        const std::string bp =
-            ofFilePath::join(ofFilePath::getCurrentExeDir(), bridgePath);
-        bridge.start(bp);
-        appendLog("bridge starting: " + bp);
+        if (!remoteChip.empty()) {
+            // Remote chip: parse "host:spikePort:memPort:cmdPort"
+            // Split right-to-left so each substr(0, pos) yields the remaining prefix.
+            std::string h = remoteChip;
+            int sPort = 9100, mPort = 9101, cPort = 9102;
+            size_t c3 = h.rfind(':');
+            if (c3 != std::string::npos) {
+                cPort = std::stoi(h.substr(c3 + 1));
+                h = h.substr(0, c3);
+                size_t c2 = h.rfind(':');
+                if (c2 != std::string::npos) {
+                    mPort = std::stoi(h.substr(c2 + 1));
+                    h = h.substr(0, c2);
+                    size_t c1 = h.rfind(':');
+                    if (c1 != std::string::npos) {
+                        sPort = std::stoi(h.substr(c1 + 1));
+                        h = h.substr(0, c1);
+                    }
+                }
+            }
+            netBridge = new NetworkBridge();
+            netBridge->start(h, sPort, mPort, cPort);
+            appendLog("remote bridge: " + h + ":" + ofToString(sPort)
+                      + ":" + ofToString(mPort) + ":" + ofToString(cPort));
+        } else {
+            // Local chip: spawn neuron_bridge.py as child process
+            const std::string bp =
+                ofFilePath::join(ofFilePath::getCurrentExeDir(), bridgePath);
+            brg()->start(bp);
+            netBridge = nullptr;
+            appendLog("bridge starting: " + bp);
+        }
     } else {
         boot = BOOT_DONE;
         // The film detector still runs, so the click count in the calibration
@@ -180,6 +205,7 @@ void ofApp::applySettings() {
 
         num("chipEnabled", chipEnabled);
         str("bridgePath", bridgePath);
+        str("remoteChip", remoteChip);
         str("biasFile", biasFile);
         num("chipNeuron", chipNeuron);
         num("chipSynapse", chipSynapse);
@@ -267,7 +293,7 @@ void ofApp::loadBiases(const std::string &path) {
     for (auto &[name, val] : j.items()) {
         try {
             const float v = val.get<float>();
-            bridge.setBias(name, v);
+            brg()->setBias(name, v);
             ++count;
             if (name == "JExcWn0") excBias = v;
             else if (name == "vepulseextp") pulseExtV = v;
@@ -285,7 +311,7 @@ void ofApp::advanceBoot() {
     case BOOT_WAIT:
         // The bridge owns the FTDI, engages the DLL and programs the DACs. It
         // says READY when the chip is answering; do not touch a bias before it.
-        if (bridge.isConnected()) {
+        if (brg()->isConnected()) {
             appendLog("bridge ready");
             boot = BOOT_BIASES; bootStageAt = now;
         } else if (held > 45.0f) {
@@ -302,7 +328,7 @@ void ofApp::advanceBoot() {
     case BOOT_MONITOR:
         // 24 bit-banged DAC channels take a moment; let them land first.
         if (held < 3.0f) break;
-        bridge.setMonitorNeuron(chipNeuron);
+        brg()->setMonitorNeuron(chipNeuron);
         appendLog("monitor -> N" + ofToString(chipNeuron));
         boot = BOOT_PROG; bootStageAt = now;
         break;
@@ -319,11 +345,11 @@ void ofApp::advanceBoot() {
         // exactly the failure this is here to avoid -- and programming a
         // synapse that is never routed costs nothing.
         if (chipProgSyn >= 0 && chipProgSyn != chipSynapse) {
-            bridge.sendProgram(chipProgSyn, chipWeight, chipExc);
+            brg()->sendProgram(chipProgSyn, chipWeight, chipExc);
             appendLog("prog S" + ofToString(chipProgSyn) + " W" + ofToString(chipWeight)
                       + (chipExc ? " exc" : " nexc"));
         }
-        bridge.sendProgram(chipSynapse, chipWeight, chipExc);
+        brg()->sendProgram(chipSynapse, chipWeight, chipExc);
         appendLog("prog S" + ofToString(chipSynapse) + " W" + ofToString(chipWeight)
                   + (chipExc ? " exc" : " nexc"));
         boot = BOOT_ROUTE; bootStageAt = now;
@@ -331,7 +357,7 @@ void ofApp::advanceBoot() {
 
     case BOOT_ROUTE:
         if (held < 0.4f) break;
-        bridge.sendRoute(chipSynapse, chipNeuron, chipExc);
+        brg()->sendRoute(chipSynapse, chipNeuron, chipExc);
         lastRouteAt = now;
         appendLog("route S" + ofToString(chipSynapse) + " -> N" + ofToString(chipNeuron)
                   + (chipExc ? " exc" : " nexc"));
@@ -563,7 +589,27 @@ void ofApp::update() {
     }
 
     advanceBoot();
-    readSerial();
+    // When using a remote chip, membrane comes from the network instead of serial
+    if (netBridge) {
+        auto memLines = netBridge->drainMembrane();
+        // Consume at most one frame's worth to keep the spiral in real time.
+        // The rest stays buffered in the network socket for next frame.
+        const size_t maxPerFrame = std::max((size_t)1, (size_t)(sigFs / 60.0f));
+        const size_t n = std::min(memLines.size(), maxPerFrame);
+        for (size_t i = 0; i < n; ++i) {
+            const auto& ml = memLines[i];
+            const size_t comma = ml.find(',');
+            if (comma != std::string::npos && comma + 1 < ml.size()) {
+                const char *p = ml.c_str() + comma + 1;
+                char *end = nullptr;
+                const double v = std::strtod(p, &end);
+                if (end != p) feed((float)v);
+            }
+        }
+        if (n > 0) lastSampleAt = ofGetElapsedTimef();
+    } else {
+        readSerial();
+    }
     syncVideo();
 
     // The board's rate is a load-bearing constant: it sets the spiral timebase
@@ -572,8 +618,7 @@ void ofApp::update() {
     if (now - rateWindowAt > 5.0f) {
         if (sigFrame > rateWindowFirst) {
             measuredFs = (float)(sigFrame - rateWindowFirst) / (now - rateWindowAt);
-            const bool off = std::fabs(measuredFs - sigFs) > 0.15f * sigFs;
-            // Say it once when it is right, every window while it is wrong.
+            const bool off = !netBridge && std::fabs(measuredFs - sigFs) > 0.15f * sigFs;
             if (off)
                 appendLog("board is streaming " + ofToString(measuredFs, 0)
                           + " Hz but deviceRateHz is " + ofToString(sigFs, 0));
@@ -586,12 +631,14 @@ void ofApp::update() {
     }
 
     // The link going quiet is survivable: the picture keeps decaying, no state
-    // is reset, and the port is retried.
-    if (!serialOpen && now - lastOpenAttempt > 2.0f) openSerial();
-    else if (serialOpen && now - lastSampleAt > 3.0f && now - lastOpenAttempt > 3.0f) {
-        appendLog("no samples for 3 s -- reopening " + devicePath);
-        openSerial();
-        lastSampleAt = now;
+    // is reset, and the port is retried. (Not used in remote-chip mode.)
+    if (!netBridge) {
+        if (!serialOpen && now - lastOpenAttempt > 2.0f) openSerial();
+        else if (serialOpen && now - lastSampleAt > 3.0f && now - lastOpenAttempt > 3.0f) {
+            appendLog("no samples for 3 s -- reopening " + devicePath);
+            openSerial();
+            lastSampleAt = now;
+        }
     }
 
     // Deliver the cat's spikes to the die, one TRIG each. The rate limit is the
@@ -606,13 +653,13 @@ void ofApp::update() {
         // Re-sending it with every trigger doubled the command traffic and
         // buried the log. It is refreshed slowly instead, as cheap insurance.
         if (now - lastRouteAt > 10.0f) {
-            bridge.sendRoute(chipSynapse, chipNeuron, chipExc);
+            brg()->sendRoute(chipSynapse, chipNeuron, chipExc);
             lastRouteAt = now;
         }
         while (fired < trigMaxPerFrame && filmSpikes.peek(ev)) {
             if (now - lastTrigAt < minGap) break;
             filmSpikes.skipOne();
-            bridge.sendTrigger();
+            brg()->sendTrigger();
             lastTrigAt = now;
             ++fired;
             chipFired.fetch_add(1);
@@ -621,103 +668,101 @@ void ofApp::update() {
 
     // The chip's own report of the spikes it produced. Only the monitored
     // neuron is of interest here; the rest of the array is not being driven.
+    // New spikes are detected by tracking the latest timestamp seen; this gives
+    // a clean per-frame delta that the self-healing can compare to TRIGs without
+    // deque-aging artefacts.
     if (chipEnabled) {
-        auto spikes = bridge.getSpikes(2.0f);
+        auto spikes = brg()->getSpikes(2.0f);
         int inWindow = 0;
+        int64_t maxTs = lastAerTs;
+        bool gotNew = false;
         for (const auto &s : spikes) {
             if (s.neuron != chipNeuron) continue;
             ++inWindow;
             if (s.timestamp_us > lastAerTs) {
-                lastAerTs = s.timestamp_us;
-                aerSpikeCount.fetch_add(1);
-                HubelSpikeEvent e;
-                e.frame = 0;
-                e.excursion = 1.0f;
-                e.rateHz = 0.0f;
-                aerSpikes.push(e);
+                ++aerNewThisFrame;
+                if (s.timestamp_us > maxTs) maxTs = s.timestamp_us;
+                gotNew = true;
             }
         }
+        if (gotNew) lastAerTs = maxTs;
+        // One tick per frame if new AER spikes arrived (enough for audio).
+        if (aerNewThisFrame > 0) {
+            HubelSpikeEvent e;
+            e.frame = 0;
+            e.excursion = 1.0f;
+            e.rateHz = 0.0;
+            aerSpikes.push(e);
+        }
         chipRateHz.store(inWindow / 2.0f);
+        aerSpikeCount += aerNewThisFrame;
+        aerNewThisWindow += aerNewThisFrame;
+        aerNewThisFrame = 0;
     }
 
-    for (auto &msg : bridge.drainLog()) appendLog(msg);
+    for (auto &msg : brg()->drainLog()) appendLog(msg);
 
-    // Say once every 15 s what went in and what came back. Without this pair the
-    // only way to know the die is answering is to look at the plinth.
-    if (stimulating.load() && now - heartbeatAt > 15.0f) {
+    // ------------------------------------------------------------------
+    // 15-second heartbeat: log counts + self-healing in one window so the
+    // numbers in the log are exactly what the heal acted on.
+    // ------------------------------------------------------------------
+    if (chipEnabled && stimulating.load() && boot == BOOT_DONE
+        && now - heartbeatAt > 15.0f) {
         heartbeatAt = now;
-        appendLog("clicks " + ofToString(filmDetected.load())
-                  + "  triggers " + ofToString(chipFired.load())
+
+        const uint64_t dClicks = filmDetected.load() - lastFilmCount;
+        const uint64_t dTrigs = chipFired.load() - healLastTrigCount;
+        const uint64_t dSpikes = aerNewThisWindow;
+        lastFilmCount = filmDetected.load();
+        healLastTrigCount = chipFired.load();
+        aerNewThisWindow = 0;
+        const float ratio = dTrigs > 0 ? (float)dSpikes / (float)dTrigs : -1.0f;
+        healRatio = (dTrigs >= 5) ? ratio : 1.0f;
+
+        appendLog("clicks " + ofToString(dClicks)
+                  + "  triggers " + ofToString(dTrigs)
                   + "  N" + ofToString(chipNeuron) + " " + ofToString(chipRateHz.load(), 1)
-                  + " spk/s  aerN14 " + ofToString(aerSpikeCount.load())
+                  + " spk/s  aerN14 " + ofToString(dSpikes)
+                  + "  ratio " + ofToString(healRatio, 2)
+                  + "  bias " + ofToString(excBias, 4)
                   + "  membrane " + ofToString(memDet.rate(), 1) + " Hz");
-    }
 
-    // ------------------------------------------------------------------
-    // self-healing: maintain 1:1 input→output ratio
-    // ------------------------------------------------------------------
-    // Every healCheckInterval seconds, compare TRIGs sent to AER spikes
-    // received for the monitored neuron. If the ratio drifts, adjust.
-    //
-    // The sentinel is the host-side count comparison. Recovery is a PID-like
-    // loop: widen/narrow the pulse width first (it is DAC-free), then nudge
-    // the excitatory bias, and finally re-route as last resort.
-    if (chipEnabled && stimulating.load() && boot == BOOT_DONE) {
-        constexpr float kHealInterval = 15.0f;
-        if (now - healCheckAt > kHealInterval) {
-            healCheckAt = now;
-
-            const uint64_t trigs = chipFired.load();
-            const uint64_t spikes = aerSpikeCount.load();
-            const uint64_t dTrigs = trigs - healLastTrigCount;
-            const uint64_t dSpikes = spikes - healLastSpikeCount;
-            healLastTrigCount = trigs;
-            healLastSpikeCount = spikes;
-
-            if (dTrigs >= 5) {
-                healRatio = (float)dSpikes / (float)dTrigs;
-
-                if (healRatio < 0.95f) {
-                    // Under-firing: raise excitatory synapse bias (more charge)
-                    // Adaptive step: larger when far from 1:1, smaller when close
-                    const float err = 1.0f - healRatio;
-                    const float step = std::max(0.001f, std::min(0.010f, std::fabs(err) * 0.020f));
-                    const float newV = excBias + step;
-                    excBias = newV;
-                    bridge.setBias("JExcWn0", newV);
-                    healStage = 1;
-                    ++healActions;
-                    ++healBiasNudges;
-                    healStatus = "raising JExcWn0 to " + ofToString(newV, 4) + "V";
-                    appendLog("heal: ratio " + ofToString(healRatio, 2)
-                              + "  step " + ofToString(step, 3) + "V  " + healStatus);
-                } else if (healRatio > 1.05f) {
-                    // Over-firing: lower excitatory synapse bias (less charge)
-                    // Adaptive step: larger when far from 1:1, smaller when close
-                    const float err = healRatio - 1.0f;
-                    const float step = std::max(0.001f, std::min(0.010f, std::fabs(err) * 0.020f));
-                    const float newV = excBias - step;
-                    excBias = newV;
-                    bridge.setBias("JExcWn0", newV);
-                    healStage = 2;
-                    ++healActions;
-                    ++healBiasNudges;
-                    healStatus = "lowering JExcWn0 to " + ofToString(newV, 4) + "V";
-                    appendLog("heal: ratio " + ofToString(healRatio, 2)
-                              + "  step " + ofToString(step, 3) + "V  " + healStatus);
-                } else if (healRatio < 0.01f && dTrigs > 20) {
-                    // Dead: re-route
-                    bridge.sendProgram(chipSynapse, chipWeight, chipExc);
-                    bridge.sendRoute(chipSynapse, chipNeuron, chipExc);
-                    healStage = 3;
-                    ++healActions;
-                    healStatus = "re-routing S" + ofToString(chipSynapse)
-                                 + " -> N" + ofToString(chipNeuron);
-                    appendLog("heal: dead! " + healStatus);
-                } else {
-                    healStage = 0;
-                    healStatus = "ok (" + ofToString(healRatio, 2) + ")";
-                }
+        if (dTrigs >= 5) {
+            if (healRatio < 0.85f) {
+                const float err = 1.0f - healRatio;
+                const float step = std::max(0.001f, std::min(0.005f, err * 0.003f));
+                const float newV = excBias + step;
+                excBias = newV;
+                brg()->setBias("JExcWn0", newV);
+                healStage = 1;
+                ++healActions;
+                ++healBiasNudges;
+                healStatus = "raising JExcWn0 to " + ofToString(newV, 4) + "V";
+                appendLog("heal: ratio " + ofToString(healRatio, 2)
+                          + "  step " + ofToString(step, 3) + "V  " + healStatus);
+            } else if (healRatio > 1.15f) {
+                const float err = healRatio - 1.0f;
+                const float step = std::max(0.001f, std::min(0.005f, err * 0.003f));
+                const float newV = excBias - step;
+                excBias = newV;
+                brg()->setBias("JExcWn0", newV);
+                healStage = 2;
+                ++healActions;
+                ++healBiasNudges;
+                healStatus = "lowering JExcWn0 to " + ofToString(newV, 4) + "V";
+                appendLog("heal: ratio " + ofToString(healRatio, 2)
+                          + "  step " + ofToString(step, 3) + "V  " + healStatus);
+            } else if (healRatio < 0.01f && dTrigs > 20) {
+                brg()->sendProgram(chipSynapse, chipWeight, chipExc);
+                brg()->sendRoute(chipSynapse, chipNeuron, chipExc);
+                healStage = 3;
+                ++healActions;
+                healStatus = "re-routing S" + ofToString(chipSynapse)
+                             + " -> N" + ofToString(chipNeuron);
+                appendLog("heal: dead! " + healStatus);
+            } else {
+                healStage = 0;
+                healStatus = "ok (" + ofToString(healRatio, 2) + ")";
             }
         }
     }
@@ -972,7 +1017,7 @@ void ofApp::drawCalibration() {
     const char *stage[] = {"waiting for bridge", "biases", "monitor", "prog",
                            "route", "starting", "running"};
     snprintf(buf, sizeof(buf), "chip: %s  bridge %s  N%d <- S%d W%d %s   %.1f spk/s",
-             stage[(int)boot], bridge.isConnected() ? "ready" : "DOWN",
+             stage[(int)boot], brg()->isConnected() ? "ready" : "DOWN",
              chipNeuron, chipSynapse, chipWeight, chipExc ? "exc" : "nexc",
              chipRateHz.load());
     ofDrawBitmapString(buf, 16, 22);
@@ -1015,7 +1060,8 @@ void ofApp::exit() {
     if (streamOpen) soundStream.close();
     serial.close();
     video.close();
-    bridge.stop();
+    brg()->stop();
+    if (netBridge) { delete netBridge; netBridge = nullptr; }
 }
 
 void ofApp::keyPressed(int key) {
