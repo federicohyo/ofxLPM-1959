@@ -592,12 +592,7 @@ void ofApp::update() {
     // When using a remote chip, membrane comes from the network instead of serial
     if (netBridge) {
         auto memLines = netBridge->drainMembrane();
-        // Consume at most one frame's worth to keep the spiral in real time.
-        // The rest stays buffered in the network socket for next frame.
-        const size_t maxPerFrame = std::max((size_t)1, (size_t)(sigFs / 60.0f));
-        const size_t n = std::min(memLines.size(), maxPerFrame);
-        for (size_t i = 0; i < n; ++i) {
-            const auto& ml = memLines[i];
+        for (const auto& ml : memLines) {
             const size_t comma = ml.find(',');
             if (comma != std::string::npos && comma + 1 < ml.size()) {
                 const char *p = ml.c_str() + comma + 1;
@@ -606,7 +601,7 @@ void ofApp::update() {
                 if (end != p) feed((float)v);
             }
         }
-        if (n > 0) lastSampleAt = ofGetElapsedTimef();
+        if (!memLines.empty()) lastSampleAt = ofGetElapsedTimef();
     } else {
         readSerial();
     }

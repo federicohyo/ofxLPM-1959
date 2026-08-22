@@ -2,6 +2,8 @@
 #include "ofLog.h"
 #include "ofUtils.h"
 
+#include <chrono>
+#include <thread>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
