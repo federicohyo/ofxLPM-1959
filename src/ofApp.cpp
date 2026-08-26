@@ -20,7 +20,7 @@
 //
 // Three devices, three separate paths, and only one of them is shared:
 //   FTDI  -> neuron_bridge.py -> UART commands + AER spike stream   (the chip)
-//   ACM   -> "seconds,volts" at 1 kHz                               (the membrane)
+//   ACM   -> "seconds,volts[,volts2]" at 1 kHz                      (the membrane)
 //   sound -> the film out, and the ticks the measured resets strike
 //
 // The one FTDI rule still holds: kill any other neuron_bridge.py, GUI or bench
@@ -418,6 +418,14 @@ void ofApp::syncVideo() {
 
 // ---------------------------------------------------------------------------
 // the membrane -- "seconds,volts" over USB CDC at the board's exact rate
+//
+// The two-channel firmware sends a third field ("seconds,ch1,ch2"). This piece
+// is single-channel by design -- the membrane is the whole subject -- so it
+// reads field 2 and ignores whatever follows. Both parsers below hand strtod
+// the text after the first comma and it stops at the next one, which makes
+// them channel-count agnostic for free. Keep it that way: rewriting either as
+// a split-on-comma with a field-count check would reject the two-channel
+// stream outright, and the board is shared with the bench scope.
 // ---------------------------------------------------------------------------
 
 bool ofApp::openSerial() {
@@ -450,7 +458,9 @@ void ofApp::readSerial() {
                 if (lineBuf.size() > 2) {
                     // The value is what matters; the index comes from the
                     // count, because the board's rate is exact and its
-                    // timestamp is a display convention that wraps.
+                    // timestamp is a display convention that wraps. Field 2
+                    // only: strtod stops at the next comma, so a second
+                    // channel on the wire is ignored rather than misread.
                     const size_t comma = lineBuf.find(',');
                     if (comma != std::string::npos && comma + 1 < lineBuf.size()) {
                         const char *p = lineBuf.c_str() + comma + 1;
@@ -621,6 +631,8 @@ void ofApp::update() {
     if (netBridge) {
         auto memLines = netBridge->drainMembrane();
         for (const auto& ml : memLines) {
+            // Field 2 only, same as the serial path above -- a second channel
+            // relayed by the plinth is ignored, not misread.
             const size_t comma = ml.find(',');
             if (comma != std::string::npos && comma + 1 < ml.size()) {
                 const char *p = ml.c_str() + comma + 1;

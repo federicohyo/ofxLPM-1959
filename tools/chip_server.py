@@ -4,7 +4,10 @@
 Runs on the machine connected to the chip (e.g. Raspberry Pi near the plinth).
 Exposes two TCP ports:
   - spikes port: lines from neuron_bridge.py stdout (S, RATE, DROPS, ...)
-  - membrane port: "seconds,volts" lines from the Pixhawk ADC (/dev/ttyACM0)
+  - membrane port: "seconds,volts" lines from the Pixhawk ADC (/dev/ttyACM0).
+    Lines are relayed whole and never parsed here, so the two-channel firmware
+    ("seconds,ch1,ch2") passes through unchanged; picking a channel is the
+    reader's business, and the GUI takes channel 1.
 
 And one command port (read by the bridge): any line received here is piped into
 neuron_bridge.py's stdin, so the remote GUI can send B, M, P, S, T, etc.

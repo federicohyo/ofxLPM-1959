@@ -82,7 +82,7 @@ on the plinth machine and relays three things.
 | port | direction | carries |
 |---|---|---|
 | 9100 | plinth → app | `neuron_bridge.py` stdout: `READY`, `S <n> <us>`, `RATE`, `BOK`/`MOK`/`POK`/`SOK` |
-| 9101 | plinth → app | `seconds,volts` from the ADC board, at the board's own rate |
+| 9101 | plinth → app | `seconds,volts` from the ADC board, at the board's own rate. Two-channel firmware sends `seconds,ch1,ch2`; the relay forwards lines whole and the app reads channel 1 |
 | 9102 | app → plinth | anything the app would have written to the bridge's stdin |
 
 The plinth machine here is a Raspberry Pi 5 (Debian 13, aarch64) at
@@ -207,7 +207,7 @@ Three devices, three separate links:
 | | |
 |---|---|
 | FTDI | `neuron_bridge.py` — UART commands out, AER spike stream back |
-| `/dev/ttyACM0` | the monitor pin, sampled at **1 kHz** by a Pixhawk 2.4.8 (STM32F427) and streamed as `seconds,volts` over USB CDC |
+| `/dev/ttyACM0` | the monitor pin, sampled at **1 kHz** by a Pixhawk 2.4.8 (STM32F427) and streamed as `seconds,volts` over USB CDC. The two-channel build of that firmware appends a third field; this app is single-channel and ignores it |
 | sound card | the tape out on the left, the ticks the measured resets strike on the right |
 
 The board's rate is load bearing: it sets the spiral's timebase and the
