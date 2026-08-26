@@ -16,10 +16,12 @@ ROOT="$(cd "$HERE/.." && pwd)"
 HEX="$HERE/tools/firmware/neuron_handshake/neuron_handshake_25MHz_exhibition.hex"
 EXPECT_SHA="1caf789f00ac01f3"
 PY="$ROOT/.venv-meas/bin/python3"
+# the bench venv is optional here: a system python with pyftdi flashes just as well
+[[ -x "$PY" ]] || PY="$(command -v python3)"
 CLOCK=25
 
 [[ -f "$HEX" ]] || { echo "ERROR: pinned image missing: $HEX" >&2; exit 1; }
-[[ -x "$PY"  ]] || { echo "ERROR: bench venv missing: $PY" >&2; exit 1; }
+[[ -x "$PY"  ]] || { echo "ERROR: no python3 found (need pyftdi)" >&2; exit 1; }
 
 GOT="$(sha256sum "$HEX" | cut -c1-16)"
 if [[ "$GOT" != "$EXPECT_SHA" ]]; then
