@@ -26,11 +26,13 @@ pkill -x ofxLPM-1959 2>/dev/null || true
 pkill -x ffplay 2>/dev/null || true
 sleep 1
 
-# no blanking, no lock, while the piece runs
+# no blanking, no lock, no suspend while the piece runs (it lives on AC)
 xset s off -dpms 2>/dev/null || true
 gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
 gsettings set org.gnome.desktop.screensaver idle-activation-enabled false 2>/dev/null || true
 gsettings set org.gnome.desktop.screensaver lock-enabled false 2>/dev/null || true
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type nothing 2>/dev/null || true
+gsettings set org.gnome.settings-daemon.plugins.power lid-close-ac-action nothing 2>/dev/null || true
 
 # the app on DP-2-2: start.sh launches it and holds its volume at 100%
 "$HERE/start.sh" &

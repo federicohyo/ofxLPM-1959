@@ -80,9 +80,9 @@ What does not:
 
 - **Power.** Nothing autostarts. If the laptop reboots, someone logs in and
   runs `./museum.sh`. The Pi comes up on its own (udev coldplug).
-- **The lid.** Do not close it untested: with the dock monitors attached,
-  logind should treat the machine as docked (`HandleLidSwitchDocked=ignore`
-  is the default) — verify once before trusting it for the night.
+- **The lid, off AC only.** `museum.sh` sets `lid-close-ac-action nothing`
+  and `sleep-inactive-ac-type nothing`, so on mains the lid can be closed.
+  On battery GNOME still suspends — keep it plugged in.
 - Blank screen / lock screen are off while `museum.sh` runs; they come back
   at the next login.
 
