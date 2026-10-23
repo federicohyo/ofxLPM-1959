@@ -25,6 +25,13 @@ One window, one thing to start.
       sound: left = the tape          sound: right = the die
 ```
 
+<p align="center"><img src="fig/1959_mam.webp" alt="1959 at MAM, LPM 2026 Rome" width="270"></p>
+
+The story of the piece — the cat, the synapses, the layout, the concept — is
+also a two-minute film in this repository:
+[`video/1959_master_1080p.mp4`](video/1959_master_1080p.mp4) (narrated,
+subtitled; a silent venue loop builds from it with `make -C video loop`).
+
 ## Running it
 
 ```bash
@@ -217,53 +224,6 @@ disagrees with `deviceRateHz` by more than 15%. The board firmware is
 currently 1 kHz; earlier images were 400 Hz, and `traceAlphaQuiet` has to be
 rescaled inversely with the rate (0.12 at 400 Hz, 0.048 at 1 kHz).
 
-## A second film: lightbeat
-
-`tools/make_lightbeat.py` synthesizes an alternative to the 1959 film:
-`bin/data/lightbeat.mp4` + `bin/data/lightbeat.s16` (not in git; regenerate
-any time, numpy + ffmpeg only). The picture is a field of receptive fields:
-a short bar of light tours the screen on a closed billiard path at constant
-speed, and scattered on its way sit faint rings, one per hit of a 4-bar
-loop, each with a dash marking its preferred direction and a color marking
-its voice — cyan kick, magenta snare, amber hat. Every hit of the music is
-*emitted* when the bar crosses the matching ring from its preferred
-direction — the beat is the readout of a retina, ninety degrees from the
-electrode end of the 1959 rig. Two decoy rings on the path are crossed from
-the wrong direction: the light passes through and nothing fires, which is
-what makes the others direction-selective rather than just proximity sensors.
-The light on screen *is* the sound the detector hears, and the detector's
-output is what the die is fed, so the neuron's part in the music is steered
-by the light in the video.
-
-The two channels carry different things. The LEFT channel — the only one the
-detector reads — is clicks alone: each voice is a fast pulse plus a slow
-monotone tail, because a sustained tone re-arms the peak follower on every
-cycle and would fire it over and over. The RIGHT channel adds the bass and
-the arp; the room hears the downmix, so the beat sounds full while the
-neuron sees a clean click track. `filmLowpassHz` is 0 and
-`filmRefractoryMs` is 110 in this preset: after each fire the follower's own
-50 ms decay glides down from `(peak − threshold)` and would re-cross a low
-threshold once more, about `50·ln((A−thr)/thr)` ms later — 110 ms covers
-that down to threshold 0.10, and the 16th-note hats (121 ms apart) still get
-through.
-
-The voices peak at 0.85 (kick), 0.50 (snare), 0.34 (hat), so the
-`,` and `.` keys pick **which drum voice the neuron plays**, measured on this
-render:
-
-| `filmThreshold` | the die hears | events |
-|---|---|---|
-| 0.60 | kicks only | 64 |
-| 0.42 | kicks + snares | 128 |
-| 0.30–0.22 | the whole groove, hats included | 272 |
-| ≤ 0.15 | + a little texture; at 0.10 each kick gains a slap echo ~112 ms late | |
-
-To use it: `cp bin/data/settings.json_lightbeat bin/data/settings.json` and
-restart the app (the media paths are read at startup). Chip bring-up, the
-self-healing sentinel, the keys — everything else is unchanged. Copy one of
-the other presets back to return to the film. `tools/make_lightbeat.py
---no-video` redoes only the audio and re-prints the threshold map above.
-
 ## Where the code comes from
 
 This repository is self-contained on purpose — it runs on its own rather than
@@ -301,9 +261,8 @@ host, using the same bias commands the GUI uses. The calibration overlay (type
 - `"tickSource": "aer"` strikes the tick from the chip's own digital report of
   each spike instead of the analog reset, which keeps the right channel alive
   if the ADC board is not connected. `"both"` strikes on either.
-- `bin/data/video.mp4` (25 MB) and `bin/data/audio.s16` (127 MB) are not in
-  git. The film is somebody else's work and is not redistributed here; the PCM
-  is derived from it and there is no reason to store it. Put your own copy of
-  the film at `bin/data/video.mp4` and `./prepare.sh` decodes the soundtrack
-  beside it. (On the bench it also finds the copies the sibling apps already
-  have and links to those instead of making a third.)
+- `bin/data/video.mp4` (3.6 MB, *Hubel & Wiesel 2 — Cat Experiment*, 1959)
+  and `bin/data/audio.s16` (19 MB, the PCM of its soundtrack) are in git, so
+  the piece runs out of the box; the film's credit stands as on the poster and
+  in the story film. `./prepare.sh` still decodes the PCM beside the film if
+  you bring your own copy instead.
