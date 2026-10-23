@@ -92,45 +92,43 @@ build/beat2.mp4: assets/HubelWiesel_1959.webm voice/beat2.wav Makefile | build
 	    [bed][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
 	  -map "[v]" -map "[a]" $(ENC) -t 32 $@
 
-# b3 -- the chip: die micrograph -> neuron circuit -> soma animation
-build/beat3.mp4: assets/die.jpg assets/tikz_neuron_circuit-1.png voice/beat3.wav ../bin/data/audio.s16 Makefile | build
-	$(FF) -i assets/die.jpg -i assets/tikz_neuron_circuit-1.png \
-	  -ss 0 -t 18 -i $(AVDIR)/soma_synapse.mp4 -i voice/beat3.wav \
+# b3 -- the chip: die micrograph -> the soma animation (membrane, leak, threshold).
+# The neuron-circuit schematic that sat between them is gone; its seconds went
+# to the animation the narration was describing all along.
+build/beat3.mp4: assets/die.jpg voice/beat3.wav ../bin/data/audio.s16 Makefile | build
+	$(FF) -i assets/die.jpg \
+	  -ss 0 -t 28 -i $(AVDIR)/soma_synapse.mp4 -i voice/beat3.wav \
 	  -f s16le -ar 48000 -ac 2 -t 37 -i ../bin/data/audio.s16 \
 	  -filter_complex "\
 	    [0:v]scale=2400:1350:force_original_aspect_ratio=decrease,pad=2400:1350:(ow-iw)/2:(oh-ih)/2,zoompan=z='1+0.10*on/270':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=270:s=1920x1080:fps=30,setsar=1,format=yuv420p[v0];\
-	    [1:v]scale=2400:1350:force_original_aspect_ratio=decrease,pad=2400:1350:(ow-iw)/2:(oh-ih)/2,zoompan=z='1+0.08*on/300':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=300:s=1920x1080:fps=30,setsar=1,format=yuv420p[v1];\
-	    [2:v]$(FIT)[v2];\
-	    [v0][v1][v2]concat=n=3:v=1:a=0[v];\
-	    [3:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=800|800[nar];\
-	    [4:a]volume=1.2[bed];\
+	    [1:v]$(FIT)[v1];\
+	    [v0][v1]concat=n=2:v=1:a=0[v];\
+	    [2:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=800|800[nar];\
+	    [3:a]volume=1.2[bed];\
 	    [bed][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
 	  -map "[v]" -map "[a]" $(ENC) -t 37 $@
 
-# b4 -- the synapse: schematic -> die photo of the synapse
-build/beat4.mp4: assets/tikz_synapse_circuit-1.png assets/syn_dpi_exc_aVLSI.png voice/beat4.wav ../bin/data/audio.s16 Makefile | build
-	$(FF) -i assets/tikz_synapse_circuit-1.png -i assets/syn_dpi_exc_aVLSI.png \
+# b4 -- the synapse: the silicon layout held for the whole beat. The two white
+# circuit schematics it used to open with are kept at build/beat4_with_schematics.mp4.
+build/beat4.mp4: assets/silicon_neuron_layout_avlsi2024.png voice/beat4.wav ../bin/data/audio.s16 Makefile | build
+	$(FF) -i assets/silicon_neuron_layout_avlsi2024.png \
 	  -i voice/beat4.wav -f s16le -ar 48000 -ac 2 -t 21 -i ../bin/data/audio.s16 \
 	  -filter_complex "\
-	    [0:v]scale=2400:1350:force_original_aspect_ratio=decrease,pad=2400:1350:(ow-iw)/2:(oh-ih)/2,zoompan=z='1+0.08*on/300':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=300:s=1920x1080:fps=30,setsar=1,format=yuv420p[v0];\
-	    [1:v]scale=2400:1350:force_original_aspect_ratio=decrease,pad=2400:1350:(ow-iw)/2:(oh-ih)/2,zoompan=z='1+0.10*on/330':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=330:s=1920x1080:fps=30,setsar=1,format=yuv420p[v1];\
-	    [v0][v1]concat=n=2:v=1:a=0[v];\
-	    [2:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=500|500[nar];\
-	    [3:a]volume=1.2[bed];\
+	    [0:v]scale=2400:1350:force_original_aspect_ratio=decrease,pad=2400:1350:(ow-iw)/2:(oh-ih)/2,zoompan=z='1+0.10*on/630':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=630:s=1920x1080:fps=30,setsar=1,format=yuv420p[v];\
+	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=500|500[nar];\
+	    [2:a]volume=1.2[bed];\
 	    [bed][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
 	  -map "[v]" -map "[a]" $(ENC) -t 21 $@
 
-# b5 -- the array: layout -> the 16-neuron array animation
-build/beat5.mp4: assets/silicon_neuron_layout_avlsi2024.png voice/beat5.wav ../bin/data/audio.s16 Makefile | build
-	$(FF) -i assets/silicon_neuron_layout_avlsi2024.png \
-	  -ss 29 -t 14 -i $(AVDIR)/array_loop160_v0.mp4 -i voice/beat5.wav \
+# b5 -- the array: the 16-neuron array animation, held for the whole beat
+# (the layout still that used to open it moved into beat 4)
+build/beat5.mp4: voice/beat5.wav ../bin/data/audio.s16 Makefile | build
+	$(FF) -ss 29 -t 21 -i $(AVDIR)/array_loop160_v0.mp4 -i voice/beat5.wav \
 	  -f s16le -ar 48000 -ac 2 -t 21 -i ../bin/data/audio.s16 \
 	  -filter_complex "\
-	    [0:v]scale=2400:1350:force_original_aspect_ratio=decrease,pad=2400:1350:(ow-iw)/2:(oh-ih)/2,zoompan=z='1+0.10*on/210':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=210:s=1920x1080:fps=30,setsar=1,format=yuv420p[v0];\
-	    [1:v]$(FIT)[v1];\
-	    [v0][v1]concat=n=2:v=1:a=0[v];\
-	    [2:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=600|600[nar];\
-	    [3:a]volume=1.2[bed];\
+	    [0:v]$(FIT)[v];\
+	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=600|600[nar];\
+	    [2:a]volume=1.2[bed];\
 	    [bed][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
 	  -map "[v]" -map "[a]" $(ENC) -t 21 $@
 
