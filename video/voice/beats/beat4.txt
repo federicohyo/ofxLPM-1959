@@ -1,0 +1,1 @@
+Every click on the tape becomes one spike, delivered to neuron fourteen through one synapse. This is its circuit: a few transistors that turn a digital spike into a pulse of current. The weight is electric charge — how much current, for how long. Not a number stored in memory: a physical fact.

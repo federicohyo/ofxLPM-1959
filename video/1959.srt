@@ -1,0 +1,80 @@
+1
+00:00:09,200 --> 00:00:19,842
+In 1959, David Hubel and Torsten Wiesel lowered an electrode into the visual cortex of a cat, and moved a bar of light across its field of view.
+
+2
+00:00:19,892 --> 00:00:25,188
+A single neuron answered, and its spikes were audible as clicks on tape.
+
+3
+00:00:25,238 --> 00:00:28,233
+The clicks won them the 1981 Nobel Prize.
+
+4
+00:00:28,283 --> 00:00:33,950
+They meant: seeing is built, cell by cell, from single features of the world.
+
+5
+00:00:40,800 --> 00:00:52,496
+This piece plays that recording into a chip designed by Federico Corradi: sixteen analog spiking neurons on one piece of silicon, three point six by five point two millimetres.
+
+6
+00:00:52,546 --> 00:01:02,639
+Each neuron is a circuit, like this one: a capacitor holds the membrane voltage, a transistor leaks it away, and a comparator watches for the threshold.
+
+7
+00:01:02,689 --> 00:01:05,309
+It has no clock and computes no numbers.
+
+8
+00:01:05,359 --> 00:01:08,112
+It answers in continuous time, in physics.
+
+9
+00:01:08,162 --> 00:01:10,314
+And it never answers identically.
+
+10
+00:01:10,364 --> 00:01:12,850
+No two neurons, born or made, ever do.
+
+11
+00:01:17,500 --> 00:01:23,362
+Every click on the tape becomes one spike, delivered to neuron fourteen through one synapse.
+
+12
+00:01:23,412 --> 00:01:29,081
+This is its circuit: a few transistors that turn a digital spike into a pulse of current.
+
+13
+00:01:29,131 --> 00:01:33,130
+The weight is electric charge — how much current, for how long.
+
+14
+00:01:33,180 --> 00:01:36,150
+Not a number stored in memory: a physical fact.
+
+15
+00:01:38,600 --> 00:01:44,293
+Here is the whole array on the die: sixteen neurons, and the synapses that wire them together.
+
+16
+00:01:44,343 --> 00:01:46,187
+Sixteen neurons is not a brain.
+
+17
+00:01:46,237 --> 00:01:56,450
+It is the start of a different bet: that machines which have to perceive, in real time, on the power the world can spare, should be made of physics rather than numbers.
+
+18
+00:01:59,500 --> 00:02:10,311
+The visitor hears both: a cat's cortex from 1959, and a silicon neuron from 2026, in the same room, sixty-seven years apart — almost in unison.
+
+19
+00:02:10,361 --> 00:02:13,653
+Those clicks are where machine vision began.
+
+20
+00:02:13,703 --> 00:02:17,450
+Today's neural networks are a diagram of this cat.
+

@@ -1,0 +1,1 @@
+In 1959, David Hubel and Torsten Wiesel lowered an electrode into the visual cortex of a cat, and moved a bar of light across its field of view. A single neuron answered, and its spikes were audible as clicks on tape. The clicks won them the 1981 Nobel Prize. They meant: seeing is built, cell by cell, from single features of the world.

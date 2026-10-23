@@ -1,0 +1,69 @@
+% 1959 — title cards for the explainer video (three pages, 16:9)
+% Build: make            (xelatex + pdftoppm -> titles/card{1,2,3}.png, 1920x1080)
+%
+% Card 1: cold open, red "1959" on black.
+% Card 2: the coda quote, white + red, red hairline.
+% Card 3: credits, with the film credit.
+%
+% Same type and red as the poster (Work Sans, #9a1915), on black
+% because the footage letterboxes on black.
+
+\documentclass[11pt]{article}
+\usepackage[paperwidth=10in,paperheight=5.625in,margin=0pt]{geometry}
+\usepackage{fontspec}
+\usepackage{xcolor}
+\setmainfont{WorkSans}[
+  Path        = ../../poster/fonts/,
+  Extension   = .ttf,
+  UprightFont = WorkSans-Regular,
+  ItalicFont  = WorkSans-Italic,
+  BoldFont    = WorkSans-Bold,
+  BoldItalicFont = WorkSans-BoldItalic,
+]
+\definecolor{ink}{HTML}{000000}
+\definecolor{spike}{HTML}{9A1915}   % LPM red
+\definecolor{paper}{HTML}{FFFFFF}
+\pagecolor{ink}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\newcommand{\kicker}[1]{{\fontsize{13}{16}\selectfont\color{spike}%
+  \addfontfeature{LetterSpace=14.0}\MakeUppercase{#1}}}
+
+\begin{document}
+
+% ---------- card 1: cold open ----------
+\vspace*{\fill}
+\begin{center}
+  {\fontsize{300}{300}\selectfont\bfseries\color{spike}1959}
+\end{center}
+\vspace*{\fill}
+\newpage
+
+% ---------- card 2: coda ----------
+\vspace*{\fill}
+\begin{center}
+  {\color{spike}\rule{0.30\linewidth}{0.55pt}}\\[1.6em]
+  {\fontsize{30}{38}\selectfont\itshape\color{paper}%
+    What they copied was the wiring.}\\[0.4em]
+  {\fontsize{30}{38}\selectfont\itshape\color{spike}%
+    What they left behind was the body.}
+\end{center}
+\vspace*{\fill}
+\newpage
+
+% ---------- card 3: credits ----------
+\vspace*{\fill}
+\begin{center}
+  {\kicker{LPM 2026 Rome — Media Art Museum}}\\[2.4em]
+  {\fontsize{20}{25}\selectfont\bfseries\color{paper}%
+    1959 — an audio-visual installation}\\[1.2em]
+  {\fontsize{14}{18}\selectfont\color{paper}%
+    Federico Corradi — Neuromorphic Edge Computing Systems Lab, TU Eindhoven}\\[0.6em]
+  {\fontsize{12}{15}\selectfont\color{paper}%
+    Footage: ``Hubel \& Wiesel 2 — Cat Experiment'' (1959)}\\[0.6em]
+  {\fontsize{12}{15}\selectfont\color{paper}%
+    federicocorradi.it\,\textbar\,github.com/federicohyo/ofxLPM-1959}
+\end{center}
+\vspace*{\fill}
+
+\end{document}
