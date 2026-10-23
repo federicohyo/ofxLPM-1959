@@ -38,6 +38,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <unistd.h>
 #include <fstream>
 #include <system_error>
 
@@ -123,6 +124,19 @@ void ofApp::setup() {
     s.sampleRate = cfg.sampleRate;
     s.bufferSize = cfg.bufferSize;
     s.numBuffers = 4;
+    // Route through the system mixer (the ALSA "default" device, i.e.
+    // PulseAudio) rather than the first raw device -- on this machine that is
+    // an HDMI port with nothing attached. Through the mixer the stream can be
+    // mixed, remembered, and moved live between jack / bluetooth / hdmi with
+    // the O key. Falls back to OF's own default if "default" is not found.
+    for (const auto &d : soundStream.getDeviceList()) {
+        if (d.name == "default" && d.outputChannels >= 2) {
+            ofSoundDevice dev = d;
+            s.setOutDevice(dev);
+            appendLog("audio device: default (system mixer)");
+            break;
+        }
+    }
     s.setOutListener(this);
     streamOpen = soundStream.setup(s);
     if (!streamOpen) appendLog("sound stream would not open");
@@ -1161,6 +1175,15 @@ void ofApp::keyPressed(int key) {
     if (key == 'b' || key == 'B') {
         audioMode = 2;
         appendLog("audio: both");
+        return;
+    }
+    if (key == 'o' || key == 'O') {
+        // Cycle the system-mixer output: jack -> bluetooth -> hdmi. The
+        // script finds this process' stream and moves it; it says where it
+        // landed, which lands in the log.
+        const std::string cmd = "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)} "
+                                "../switch_audio_output.sh " + std::to_string((long)getpid());
+        (void)system(cmd.c_str());
         return;
     }
 

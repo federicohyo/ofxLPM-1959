@@ -266,3 +266,8 @@ host, using the same bias commands the GUI uses. The calibration overlay (type
   the piece runs out of the box; the film's credit stands as on the poster and
   in the story film. `./prepare.sh` still decodes the PCM beside the film if
   you bring your own copy instead.
+
+## At the museum
+
+The two-screen venue setup — the laptop, the dock, the Pi, and the one
+script that starts it all — is written up in [MUSEUM.md](MUSEUM.md).
