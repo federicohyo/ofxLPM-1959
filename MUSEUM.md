@@ -11,9 +11,9 @@ two failures that matter heal by themselves. Nothing autostarts — see
   │ federico-HP-EliteBook-        │              FT4232 ──► the die
   │ Folio-1040-G2                 │              Pixhawk ─► the membrane pin
   └───────────────────────────────┘
-    eDP-1   x=0      the laptop screen: dark, cursor parked on it
-    DP-2-1  x=1920   the 27": the story film, muted, looping
-    DP-2-2  x=3840   the 24": the app — spiral + film, fullscreen
+     eDP-1   x=0      the laptop screen: dark, cursor hidden there mid-film
+     DP-2-1  x=1920   the 27": the attract card, then the film on demand
+     DP-2-2  x=3840   the 24": the app — spiral + film, fullscreen
 ```
 
 Both monitors hang off one dock connector, so xrandr names them DP-2-1 and
@@ -24,8 +24,16 @@ x position.
 
 | monitor | x | shows | sound |
 |---|---|---|---|
-| DP-2-1 (27") | 1920 | `video/1959_loop.mp4` — ffplay, `-an`, infinite loop, subtitles burned in | none |
+| DP-2-1 (27") | 1920 | the attract card (`video/titles/card-4.png`, the film's own ending typography) until a visitor presses the mouse; then `video/1959_master_1080p.mp4`, once, fully | the film's narration, while it plays |
 | DP-2-2 (24") | 3840 | the app, fullscreen | yes |
+
+The movie screen is `movie_screen.py` (started by `museum.sh`, kept alive by
+a supervisor loop): a tkinter window with the card, ffplay for the film. A
+press on the card starts the film; while it plays the app's streams are
+muted via pactl and the cursor is parked on the laptop's dark screen, so
+nothing of the machine is visible on the piece. When the film ends the
+card comes back, the cursor returns to the card and the app's sound with
+it. If the controller dies it restarts on the card, unmuted, on its own.
 
 The app's window is placed by the script because OF fullscreens a window on
 the monitor it is sitting on: `museum.sh` moves it to `APP_X` first, then
@@ -35,11 +43,16 @@ not the app.
 
 ## The audio
 
-Only the app makes sound. It routes through the ALSA `default` device —
-the system mixer, PulseAudio — so it lands on the default sink (the laptop's
-analog jack) and can be moved live with the **O** key
-(jack → bluetooth → hdmi, `switch_audio_output.sh`). Left ear is the tape,
-right ear the die. The film player is muted; the subtitles carry it.
+The room's sound is the headphones on the jack. Outside the film it is the
+app's: the tape in one ear, the die in the other — the visitor is wired in.
+While the film plays, the app's streams are muted (pactl, from
+`movie_screen.py`) and the film's narration is the sound; when it ends the
+app's sound returns on its own.
+
+The app routes through the ALSA `default` device — the system mixer,
+PulseAudio — so it lands on the default sink (the laptop's analog jack)
+and can be moved live with the **O** key (jack → bluetooth → hdmi,
+`switch_audio_output.sh`). Left ear is the tape, right ear the die.
 
 `start.sh` holds the app's stream at 100%: the mixer's stream-restore keeps
 re-applying a stale 0% to every new stream of this app (RtAudio probing makes
@@ -52,13 +65,15 @@ stream once.
 ./museum.sh        # on the laptop, from ~/tue/ofxLPM-1959
 ```
 
-In order: kill leftovers (`pkill -x ofxLPM-1959 ffplay`), turn off blanking
-and lock, start `start.sh` (the app + the volume watcher), place the app on
-DP-2-2 and fullscreen it, start the film on DP-2-1 and fullscreen it, give
-the app focus (so `cal` / `quit` land there), park the cursor on the laptop
-screen. `APP_X` / `VIDEO_X` at the top trade the two monitors.
+In order: kill leftovers (`pkill -x ofxLPM-1959 ffplay; pkill -f
+movie_screen.py`), turn off blanking and lock, start `start.sh` (the app +
+the volume watcher), place the app on DP-2-2 and fullscreen it, start the
+movie screen controller and place it on DP-2-1, give the app focus (so
+`cal` / `quit` land there), park the cursor on the movie screen's card,
+where a visitor's press lands. `APP_X` / `VIDEO_X` at the top trade the
+two monitors.
 
-Stopping: focus the app, type `quit`, then `pkill -x ffplay`.
+Stopping: focus the app, type `quit`, then `pkill -f movie_screen.py`.
 
 ## The chip, over the wire
 
@@ -74,6 +89,8 @@ What heals by itself:
 
 - die or scope unplugged → the service stops, the sentinel holds still, and
   on replug everything re-stages (~25 s).
+- movie screen controller dead → `museum.sh`'s supervisor restarts it on
+  the card, with the app unmuted, in a couple of seconds.
 - laptop wifi down → nothing. The piece never needed it.
 
 What does not:
@@ -88,6 +105,11 @@ What does not:
 
 ## The film
 
+The movie screen plays `video/1959_master_1080p.mp4` (153 s, with its
+narration) once per press. The card is `video/titles/card-4.png`, built
+with the film's own title cards: `make -C video/titles card-4.png` (same
+Work Sans type and LPM red as the coda — the film's last sentence).
+
 Since 2026-10-23 there is no white circuit schematic anywhere in the cut:
 beat 3 is the die micrograph into the soma animation (the schematic's 10 s
 went to the animation the narration was describing), beat 4 holds the silicon
@@ -97,17 +119,9 @@ subtitles still line up. The pre-rework films are kept locally as
 `video/1959_*_schematics.mp4`, the old beat segments as
 `video/build/beat{3,4,5}_*.mp4`.
 
-To change the film at the venue: `make -C video loop` on the development
-machine, copy `video/1959_loop.mp4` to the laptop, then either rerun
-`./museum.sh` (simplest — the app restarts with it, ~30 s), or swap only the
-player and place it by hand:
+To change the film at the venue: `make -C video master` on the development
+machine, copy `video/1959_master_1080p.mp4` (and, if the text changed,
+`video/titles/card-4.png`) to the laptop, then rerun `./museum.sh`
+(simplest — the app restarts with it, ~30 s).
 
-```bash
-pkill -x ffplay; sleep 1
-cd ~/tue/ofxLPM-1959
-setsid ffplay -an -loop 0 -hide_banner -loglevel quiet video/1959_loop.mp4 &
-FWID=$(xdotool search --sync --class ffplay | head -1)
-xdotool windowactivate --sync "$FWID"; sleep 1
-xdotool windowmove "$FWID" 1920 0 && xdotool windowsize "$FWID" 1920 1080
-sleep 2; wmctrl -i -r "$FWID" -b add,fullscreen
-```
+The old looping cut, `video/1959_loop.mp4`, is kept but no longer played.

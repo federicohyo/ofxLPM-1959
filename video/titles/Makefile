@@ -1,5 +1,5 @@
-# 1959 — title cards: titles.tex -> card-{1,2,3}.png (1920x1080)
-all: card-1.png card-2.png card-3.png
+# 1959 — title cards: titles.tex -> card-{1,2,3,4}.png (1920x1080)
+all: card-1.png card-2.png card-3.png card-4.png
 
 card-%.png: titles.pdf
 	pdftoppm -png -r 192 titles.pdf card
