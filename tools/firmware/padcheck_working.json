@@ -1,0 +1,33 @@
+{
+  "time": "2026-09-22 15:19:22",
+  "url": null,
+  "mfg": 1110,
+  "product": 17,
+  "project_id": 604608183,
+  "regs": {
+    "0x08": 2,
+    "0x09": 1,
+    "0x0a": 0,
+    "0x0b": 1,
+    "0x0c": 0,
+    "0x0d": 255,
+    "0x0e": 239,
+    "0x0f": 255,
+    "0x10": 3,
+    "0x11": 18,
+    "0x12": 4
+  },
+  "flash": {
+    "status": 0,
+    "jedec": "c84016",
+    "brand": "GigaDevice GD25",
+    "uid": "30363338330e5f36"
+  },
+  "roundtrip": {
+    "wrote_1_read": 1,
+    "roundtrip": true
+  },
+  "hk_ok": true,
+  "flash_ok": true,
+  "label": "working"
+}

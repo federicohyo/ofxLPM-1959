@@ -14,3 +14,7 @@ video/assets/contact_*.png
 video/1959_*.mp4
 video/build/
 video/assets/
+
+# LaTeX build junk
+*.aux
+*.log
