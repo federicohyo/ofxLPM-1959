@@ -13,7 +13,7 @@ BEATS = [
     (40.0, 0.8, 32.1, "voice/beats/beat3.txt"),
     (77.0, 0.5, 18.7, "voice/beats/beat4.txt"),
     (98.0, 0.6, 17.9, "voice/beats/beat5.txt"),
-    (119.0, 0.5, 18.0, "voice/beats/beat6.txt"),
+    (119.0, 0.5, 24.857, "voice/beats/beat6.txt"),
 ]
 
 

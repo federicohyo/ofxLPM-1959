@@ -44,10 +44,14 @@ not the app.
 ## The audio
 
 The room's sound is the headphones on the jack. Outside the film it is the
-app's: the tape in one ear, the die in the other — the visitor is wired in.
-While the film plays, the app's streams are muted (pactl, from
+app's: the tape in the left ear, the die in the right — the visitor is wired
+in. While the film plays, the app's streams are muted (pactl, from
 `movie_screen.py`) and the film's narration is the sound; when it ends the
 app's sound returns on its own.
+
+In the film, the original bed is ducked to near-silence while the voice
+speaks and ramps back in over 0.5 s in the gaps (sidechain ducking in
+`video/Makefile`).
 
 The app routes through the ALSA `default` device — the system mixer,
 PulseAudio — so it lands on the default sink (the laptop's analog jack)
@@ -105,7 +109,7 @@ What does not:
 
 ## The film
 
-The movie screen plays `video/1959_master_1080p.mp4` (153 s, with its
+The movie screen plays `video/1959_master_1080p.mp4` (159 s, with its
 narration) once per press. The card is `video/titles/card-4.png`, built
 with the film's own title cards: `make -C video/titles card-4.png` (same
 Work Sans type and LPM red as the coda — the film's last sentence).
@@ -113,9 +117,12 @@ Work Sans type and LPM red as the coda — the film's last sentence).
 Since 2026-10-23 there is no white circuit schematic anywhere in the cut:
 beat 3 is the die micrograph into the soma animation (the schematic's 10 s
 went to the animation the narration was describing), beat 4 holds the silicon
-layout for the whole beat, beat 5 goes straight to the array animation. Beat
-durations and narration are untouched (153 s master / 147 s loop), so the
-subtitles still line up. The pre-rework films are kept locally as
+layout for the whole beat, beat 5 goes straight to the array animation.
+
+Since 2026-10-25 the piece beat names the ears: the 1959 cat in the left, the
+2026 silicon in the right, live on the same visual stimulus. That beat is 26 s
+instead of 20 s, so the master is 159 s and the loop 153 s; the subtitles are
+regenerated to match. The pre-rework films are kept locally as
 `video/1959_*_schematics.mp4`, the old beat segments as
 `video/build/beat{3,4,5}_*.mp4`.
 

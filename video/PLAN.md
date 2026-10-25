@@ -8,17 +8,18 @@ Work Sans (TTFs in `poster/fonts/`).
 Built like the poster: a Makefile in this directory, reproducible from
 assets, nothing hand-assembled in a GUI.
 
-## Storyboard (~2:00, narration ~280 words)
+## Storyboard (~2:39, narration ~313 words)
 
 | # | Beat | Time | Visual | Audio |
 |---|---|---|---|---|
 | 1 | Cold open | 0:00–0:08 | Black. Red "1959" (Work Sans bold, poster title). | Tape clicks, no voice. |
-| 2 | The experiment | 0:08–0:40 | H&W film: cat, electrode, bar of light. | Narration ¶1 + clicks. |
-| 3 | The chip | 0:40–1:10 | Die micrograph → zoom into neuron layout still → `soma_synapse.mp4` (membrane, leak, threshold). | Narration ¶2. |
-| 4 | The synapse | 1:10–1:25 | Synapse circuit clip/still; one line: a click on the tape = one spike into neuron 14, weight = charge per spike. | Narration ¶2b. |
-| 5 | The array | 1:25–1:40 | `array_loop160_v0.mp4` excerpt — sixteen neurons, routing. "Sixteen neurons is not a brain…" | Narration ¶3. |
-| 6 | The piece | 1:40–2:00 | Screen recording of the app: spiral left, film right. One ear the cat, one ear the silicon. | Real binaural capture. |
-| 7 | Coda | 2:00–2:10 | Black, red rule: "What they copied was the wiring. What they left behind was the body." Credits + film credit. | Clicks fade out. |
+| 2 | The experiment | 0:08–0:40 | H&W film: cat, electrode, bar of light. | Narration ¶1 + film sound, ducked. |
+| 3 | The chip | 0:40–1:17 | Die micrograph → zoom into neuron layout still → `soma_synapse.mp4` (membrane, leak, threshold). | Narration ¶2 + tape, ducked. |
+| 4 | The synapse | 1:17–1:38 | Synapse circuit clip/still; one line: a click on the tape = one spike into neuron 14, weight = charge per spike. | Narration ¶2b + tape, ducked. |
+| 5 | The array | 1:38–1:59 | `array_loop160_v0.mp4` excerpt — sixteen neurons, routing. "Sixteen neurons is not a brain…" | Narration ¶3 + tape, ducked. |
+| 6 | The piece | 1:59–2:25 | Screen recording of the app: spiral left, film right. Left ear the 1959 cat, right ear the 2026 silicon, live on the same stimulus. | Real binaural capture, ducked. |
+| 7 | Coda | 2:25–2:33 | Black, red rule: "What they copied was the wiring. What they left behind was the body." Credits + film credit. | Clicks fade out. |
+| 8 | Credits | 2:33–2:39 | End card. | Silence. |
 
 Loop version: same cut without the cold-open hold and the credits; starts
 and ends on a click so it tiles.
@@ -61,10 +62,11 @@ Stages:
    per beat so timing can be nudged per beat.
 3. `make cards` — cold-open "1959" card, coda quote card, credits card,
    same treatment as the poster (kicker letterspacing, red hairline).
-4. `make master` — concat beats with xfade, mix narration over the click
-   bed (tape in the open and coda, ducked under narration elsewhere),
-   burn subtitles for the silent loop, mux. → `1959_master_1080p.mp4`
-   + `.srt` for the online copy.
+4. `make master` — concat beats, mix narration over the bed. The bed is
+   sidechain-ducked to near-silence under the voice and ramps back in over
+   0.5 s in the gaps; the cold open and coda keep their clicks. Burn
+   subtitles for the silent loop, mux. → `1959_master_1080p.mp4` + `.srt`
+   for the online copy.
 5. `make loop` — re-cut without cold open and credits → `1959_loop.mp4`,
    first and last frame both mid-click.
 
@@ -85,7 +87,18 @@ Stages:
 - Subtitles burned only in the loop version; online gets soft subs.
 - `assets/` stays out of git (films, big clips); everything else in.
 
-## Status 2026-10-23 — first full render
+## Status 2026-10-25 — beat 6 re-narrated, audio ducked
+
+- Beat 6 narration now names the ears: left = the 1959 cat, right = the 2026
+  silicon, live on the same visual stimulus as the original film. It runs
+  26 s (was 20 s).
+- Every narrated beat uses sidechain ducking: the bed falls 44–63 dB under
+  the voice and ramps back to full over 0.5 s after it stops.
+- `1959_master_1080p.mp4` — 2:39, 1920x1080/30, narration + burned subtitles.
+- `1959_loop.mp4` — 2:33, credits dropped, subtitles burned, for silent looping.
+- Subtitles regenerated from the new beat-6 text; master and loop timings updated.
+
+## Status 2026-10-23 — first full render (superseded)
 
 - `1959_master_1080p.mp4` — 2:33, 1920x1080/30, narration (en_US-amy-medium) + burned subtitles.
 - `1959_loop.mp4` — 2:27, credits dropped, subtitles burned, for silent looping.

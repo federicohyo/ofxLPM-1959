@@ -65,13 +65,16 @@ cards:
 #
 # Eight beat segments, all normalised to 1920x1080/30fps/h264 + aac 48k stereo,
 # then concatenated. Durations:
-#   b1 8   b2 32   b3 31   b4 15   b5 17   b6 20   b7 8   b8 6   = 137 s
+#   b1 8   b2 32   b3 37   b4 21   b5 21   b6 26   b7 8   b8 6   = 159 s
 # Narration starts: b2 +1.2, b3 +0.8, b4 +0.5, b5 +0.6, b6 +0.5.
+# The bed (film sound or tape) is sidechain-ducked under each narration WAV.
 # See make_srt.py for the same table in subtitle form.
 
 FIT := scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p
 ENC := -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -r 30 -c:a aac -b:a 192k -ar 48000
 TAPE := -f s16le -ar 48000 -ac 2 -i ../bin/data/audio.s16
+# Narration ducks the bed: near-zero under the voice, 0.5 s ramp back in after it.
+DUCK := sidechaincompress=threshold=0.001:ratio=20:attack=5:release=500:knee=1:level_sc=8:detection=peak
 
 build:
 	mkdir -p build
@@ -87,9 +90,10 @@ build/beat1.mp4: titles/card-1.png ../bin/data/audio.s16 Makefile | build
 build/beat2.mp4: assets/HubelWiesel_1959.webm voice/beat2.wav Makefile | build
 	$(FF) -t 32 -i assets/HubelWiesel_1959.webm -i voice/beat2.wav \
 	  -filter_complex "[0:v]$(FIT)[v];\
-	    [0:a]volume=0.45[bed];\
-	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=1200|1200[nar];\
-	    [bed][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
+	    [0:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=0.45[bed];\
+	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=1200|1200,apad=whole_dur=32,asplit=2[nar][sc];\
+	    [bed][sc]$(DUCK)[duck];\
+	    [duck][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95,apad=whole_dur=33[a]" \
 	  -map "[v]" -map "[a]" $(ENC) -t 32 $@
 
 # b3 -- the chip: die micrograph -> the soma animation (membrane, leak, threshold).
@@ -103,9 +107,10 @@ build/beat3.mp4: assets/die.jpg voice/beat3.wav ../bin/data/audio.s16 Makefile |
 	    [0:v]scale=2400:1350:force_original_aspect_ratio=decrease,pad=2400:1350:(ow-iw)/2:(oh-ih)/2,zoompan=z='1+0.10*on/270':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=270:s=1920x1080:fps=30,setsar=1,format=yuv420p[v0];\
 	    [1:v]$(FIT)[v1];\
 	    [v0][v1]concat=n=2:v=1:a=0[v];\
-	    [2:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=800|800[nar];\
-	    [3:a]volume=1.2[bed];\
-	    [bed][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
+	    [2:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=800|800,apad=whole_dur=37,asplit=2[nar][sc];\
+	    [3:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=1.2[bed];\
+	    [bed][sc]$(DUCK)[duck];\
+	    [duck][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95,apad=whole_dur=38[a]" \
 	  -map "[v]" -map "[a]" $(ENC) -t 37 $@
 
 # b4 -- the synapse: the silicon layout held for the whole beat. The two white
@@ -115,9 +120,10 @@ build/beat4.mp4: assets/silicon_neuron_layout_avlsi2024.png voice/beat4.wav ../b
 	  -i voice/beat4.wav -f s16le -ar 48000 -ac 2 -t 21 -i ../bin/data/audio.s16 \
 	  -filter_complex "\
 	    [0:v]scale=2400:1350:force_original_aspect_ratio=decrease,pad=2400:1350:(ow-iw)/2:(oh-ih)/2,zoompan=z='1+0.10*on/630':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=630:s=1920x1080:fps=30,setsar=1,format=yuv420p[v];\
-	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=500|500[nar];\
-	    [2:a]volume=1.2[bed];\
-	    [bed][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
+	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=500|500,apad=whole_dur=21,asplit=2[nar][sc];\
+	    [2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=1.2[bed];\
+	    [bed][sc]$(DUCK)[duck];\
+	    [duck][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95,apad=whole_dur=22[a]" \
 	  -map "[v]" -map "[a]" $(ENC) -t 21 $@
 
 # b5 -- the array: the 16-neuron array animation, held for the whole beat
@@ -127,19 +133,21 @@ build/beat5.mp4: voice/beat5.wav ../bin/data/audio.s16 Makefile | build
 	  -f s16le -ar 48000 -ac 2 -t 21 -i ../bin/data/audio.s16 \
 	  -filter_complex "\
 	    [0:v]$(FIT)[v];\
-	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=600|600[nar];\
-	    [2:a]volume=1.2[bed];\
-	    [bed][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
+	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=600|600,apad=whole_dur=21,asplit=2[nar][sc];\
+	    [2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=1.2[bed];\
+	    [bed][sc]$(DUCK)[duck];\
+	    [duck][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95,apad=whole_dur=22[a]" \
 	  -map "[v]" -map "[a]" $(ENC) -t 21 $@
 
 # b6 -- the piece: the running installation, binaural (tape left, silicon right)
 build/beat6.mp4: assets/app_capture.mp4 voice/beat6.wav Makefile | build
-	$(FF) -ss 4 -t 20 -i assets/app_capture.mp4 -i voice/beat6.wav \
+	$(FF) -ss 2 -t 26 -i assets/app_capture.mp4 -i voice/beat6.wav \
 	  -filter_complex "[0:v]$(FIT)[v];\
-	    [0:a]pan=stereo|c0=0.95*c0|c1=0.40*c1[app];\
-	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=500|500[nar];\
-	    [app][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" \
-	  -map "[v]" -map "[a]" $(ENC) -t 20 $@
+	    [0:a]aformat=sample_rates=48000:channel_layouts=stereo,pan=stereo|c0=0.95*c0|c1=0.40*c1[bed];\
+	    [1:a]aformat=sample_rates=48000:channel_layouts=stereo,adelay=500|500,apad=whole_dur=26,asplit=2[nar][sc];\
+	    [bed][sc]$(DUCK)[duck];\
+	    [duck][nar]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95,apad=whole_dur=27[a]" \
+	  -map "[v]" -map "[a]" $(ENC) -t 26 $@
 
 # b7 -- coda: the quote, clicks fading
 build/beat7.mp4: titles/card-2.png ../bin/data/audio.s16 Makefile | build
@@ -171,7 +179,7 @@ SUBS = subtitles=1959.srt:fontsdir=../poster/fonts:force_style='FontName=Work Sa
 
 # loop for the venue: no credits, same burned subtitles
 1959_loop.mp4: build/master_raw.mp4 1959.srt
-	$(FF) -i build/master_raw.mp4 -t 147 -vf "$(SUBS)" \
+	$(FF) -i build/master_raw.mp4 -t 153 -vf "$(SUBS)" \
 	  -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -r 30 -c:a copy $@
 
 1959.srt: make_srt.py voice/beats/beat2.txt voice/beats/beat3.txt voice/beats/beat4.txt voice/beats/beat5.txt voice/beats/beat6.txt

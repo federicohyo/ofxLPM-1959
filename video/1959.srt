@@ -67,14 +67,18 @@ Sixteen neurons is not a brain.
 It is the start of a different bet: that machines which have to perceive, in real time, on the power the world can spare, should be made of physics rather than numbers.
 
 18
-00:01:59,500 --> 00:02:10,311
-The visitor hears both: a cat's cortex from 1959, and a silicon neuron from 2026, in the same room, sixty-seven years apart — almost in unison.
+00:01:59,500 --> 00:02:13,528
+The visitor hears both at once: in the left ear, a cat's cortical neuron from 1959; in the right ear, a silicon neuron from 2026, live, receiving the same visual stimulus as the original film.
 
 19
-00:02:10,361 --> 00:02:13,653
-Those clicks are where machine vision began.
+00:02:13,578 --> 00:02:17,414
+Same room, sixty-seven years apart, almost in unison.
 
 20
-00:02:13,703 --> 00:02:17,450
+00:02:17,464 --> 00:02:20,641
+Those clicks are where machine vision began.
+
+21
+00:02:20,691 --> 00:02:24,307
 Today's neural networks are a diagram of this cat.
 
